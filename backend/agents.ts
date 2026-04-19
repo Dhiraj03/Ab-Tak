@@ -55,7 +55,7 @@ function extractJson<T>(input: string): T {
   return JSON.parse(jsonString) as T;
 }
 
-async function callLLM(system: string, prompt: string, apiKey: string, model: string = "anthropic/claude-3.5-sonnet"): Promise<string | null> {
+export async function callLLM(system: string, prompt: string, apiKey: string, model: string = "anthropic/claude-3.5-sonnet"): Promise<string | null> {
   try {
     const response = await fetch(`${OR_BASE_URL}/chat/completions`, {
       method: "POST",
@@ -299,5 +299,55 @@ export async function runJudgeAgent(script: string, brief: EditorBrief, apiKey?:
     approvedDraft: 1,
     drafts: [{ draft: 1, scores, overall: 7, rewrite_triggered: false }],
     finalScript: script,
+  };
+}
+
+export type QaResult = {
+  agent: string;
+  answer: string;
+  relatedStory: string | null;
+  sources: { title: string; url: string }[];
+};
+
+export function runQaAgent(question: string, brief: EditorBrief, transcript: string): QaResult {
+  const q = question.toLowerCase();
+  const stories = brief.stories;
+  
+  let relatedStory: { title: string; link: string; keyFacts: string[] } | null = null;
+  let answer = "";
+  
+  for (const story of stories) {
+    const titleWords = story.title.toLowerCase().split(/\s+/);
+    const keywords = titleWords.filter(w => w.length > 3);
+    
+    const matchCount = keywords.filter(k => q.includes(k)).length;
+    if (matchCount > 0) {
+      relatedStory = story;
+      break;
+    }
+  }
+  
+  if (relatedStory) {
+    answer = `${relatedStory.keyFacts[0] || 'Related to: ' + relatedStory.title}. For more details, visit the source.`;
+  } else {
+    const words = q.split(/\s+/).filter(w => w.length > 4);
+    const foundIn = words.filter(w => transcript.toLowerCase().includes(w));
+    
+    if (foundIn.length > 0) {
+      answer = "This relates to one of the stories in today's bulletin. " + 
+        "The latest updates on this topic were covered in our broadcast. " +
+        "Please refer to the transcript for complete details.";
+    } else {
+      answer = "This question relates to current events. " + 
+        "The information may be from today's news coverage. " +
+        "Check back for our next bulletin for full details.";
+    }
+  }
+  
+  return {
+    agent: relatedStory ? "Context Agent" : "Fact Agent",
+    answer,
+    relatedStory: relatedStory?.title || null,
+    sources: relatedStory ? [{ title: relatedStory.title, url: relatedStory.link }] : []
   };
 }

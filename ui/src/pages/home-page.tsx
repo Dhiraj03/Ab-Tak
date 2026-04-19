@@ -33,8 +33,7 @@ export function HomePage() {
         audioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 100)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setError(`Unable to generate new bulletin: ${errorMessage}`)
+      setError('Unable to generate new bulletin. Please try again.')
       console.error('Generate error:', err)
     } finally {
       setIsGenerating(false)

@@ -76,14 +76,6 @@ export interface GenerateResponse {
   transcript: string;
   sources: SourceLink[];
   judge: JudgeSummary;
-  agents?: AgentTrace[];
-  totalDurationMs?: number;
-  totalCostUsd?: number;
-  // Debug info
-  debug?: {
-    orKeyPresent: boolean;
-    elevenLabsKeyPresent: boolean;
-  };
 }
 
 export interface QaRequest {

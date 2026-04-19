@@ -1,9 +1,20 @@
 import { runEditorAgent, runMonitorAgent, runWriterAgent, runJudgeAgent, type JudgeResult } from "./agents";
 import { fetchFeeds } from "./feeds";
-import type { AgentTrace, SourceLink, JudgeSummary } from "./types";
+import { generateAudio } from "./tts";
+import { createPipelinePlan, type PipelinePlan } from "./manager-agent";
+import { recordEpisodicMemory, generateMemoryContextForTask, type MemoryContext } from "./memory";
+import type { AgentTrace, SourceLink, JudgeSummary, RunRecord } from "./types";
 
-const ELEVENLABS_VOICE_ID = "3WqHLnw80rOZqJzW9YRB";
-const ELEVENLABS_MODEL = "eleven_flash_v2_5";
+// Re-export for use in other modules
+export { createPipelinePlan, type PipelinePlan } from "./manager-agent";
+export { 
+  recordEpisodicMemory, 
+  generateMemoryContextForTask, 
+  queryMemory,
+  getSemanticMemory,
+  getAllMemories,
+  type MemoryContext 
+} from "./memory";
 
 export type PipelineResult = {
   task: string;
@@ -33,13 +44,24 @@ function estimateCost(): number {
   return inputCost + outputCost;
 }
 
-export async function runHourOnePipeline(task: string, apiKey: string, elevenLabsKey?: string): Promise<PipelineResult> {
+export async function runHourOnePipeline(task: string, apiKey: string, elevenLabsKey?: string): Promise<PipelineResult & { run_record: RunRecord }> {
   const runId = `run-${Date.now()}`;
   const agents: AgentTrace[] = [];
   let totalDurationMs = 0;
   let totalCostUsd = 0;
   
   const pipelineStart = performance.now();
+  
+  // Determine task category for memory lookup
+  const taskLower = task.toLowerCase();
+  let taskCategory = 'general';
+  if (/tech|technology|ai|software|digital/.test(taskLower)) taskCategory = 'technology';
+  else if (/business|economy|market|finance|stock/.test(taskLower)) taskCategory = 'business';
+  else if (/science|health|medical|research/.test(taskLower)) taskCategory = 'science';
+  else if (/politic|diplomacy|international|war|election/.test(taskLower)) taskCategory = 'politics';
+  
+  // Query memory for context
+  const memoryContext = generateMemoryContextForTask(task, taskCategory);
 
   // Monitor Agent - fetch and rank stories
   const monitorStart = performance.now();
@@ -120,66 +142,7 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
 
   // Voice Agent - generate audio
   const voiceStart = performance.now();
-  console.log("Pipeline: elevenLabsKey type:", typeof elevenLabsKey, "value:", elevenLabsKey ? "[REDACTED:" + elevenLabsKey.slice(0, 3) + "...]" : "undefined/null");
-  
-  let audioResult = null;
-  let audioError = null;
-  let apiResponseStatus = null;
-  
-  if (!elevenLabsKey) {
-    audioError = "No API key provided";
-  } else {
-    try {
-      console.log("Pipeline: Calling ElevenLabs...");
-      const response = await fetch(
-        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "xi-api-key": elevenLabsKey,
-          },
-          body: JSON.stringify({
-            text: judge.finalScript.slice(0, 2500),
-            model_id: "eleven_flash_v2_5",
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.75,
-            },
-          }),
-        }
-      );
-      
-      apiResponseStatus = response.status;
-      console.log("Pipeline: ElevenLabs status:", response.status);
-      
-      if (!response.ok) {
-        const errText = await response.text();
-        audioError = `ElevenLabs API error ${response.status}: ${errText.slice(0, 100)}`;
-        console.error("Pipeline: ElevenLabs error:", audioError);
-      } else {
-        const buffer = await response.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        // Chunk the base64 encoding to avoid stack overflow
-        let binary = '';
-        const chunkSize = 8192;
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          const chunk = bytes.slice(i, i + chunkSize);
-          binary += String.fromCharCode(...chunk);
-        }
-        const base64 = btoa(binary);
-        audioResult = JSON.stringify({ 
-          base64: `data:audio/mpeg;base64,${base64}`,
-          url: `data:audio/mpeg;base64,${base64}` 
-        });
-        console.log("Pipeline: Audio generated successfully, length:", audioResult.length);
-      }
-    } catch (err) {
-      audioError = err instanceof Error ? err.message : String(err);
-      console.error("Pipeline: fetch ERROR:", audioError);
-    }
-  }
-  
+  const audioResult = await generateAudio(judge.finalScript, elevenLabsKey);
   const voiceDuration = Math.round(performance.now() - voiceStart);
   const voiceCost = audioResult ? 0.02 : 0; // ElevenLabs cost estimate per request
   
@@ -196,19 +159,12 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
     }
   }
   
-  let voiceOutputSummary = "Audio generation skipped (no API key)";
-  if (audioResult) {
-    voiceOutputSummary = `Generated audio using ElevenLabs TTS (${Math.round(audioResult.length / 1024)}KB)`;
-  } else if (audioError) {
-    voiceOutputSummary = `Audio failed: ${audioError}`;
-  }
-  
   agents.push({
     name: "Voice Agent",
     input: `Script: ${judge.finalScript.slice(0, 100)}...`,
-    output_summary: voiceOutputSummary,
+    output_summary: audioResult ? "Generated audio using ElevenLabs TTS" : "Audio generation skipped (no API key)",
     duration_ms: voiceDuration,
-    cost_usd: audioResult ? 0.02 : 0,
+    cost_usd: voiceCost,
     tokens: 0,
   });
   totalDurationMs += voiceDuration;
@@ -222,6 +178,34 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
     url: s.link,
     source: s.source,
   }));
+
+  // Create run record
+  const runRecord: RunRecord = {
+    run_id: runId,
+    timestamp: new Date().toISOString(),
+    task,
+    status: 'completed',
+    agents,
+    transcript: judge.finalScript,
+    sources,
+    audio_url: audioBase64 || audioUrl,
+    judge: {
+      approvedDraft: judge.approvedDraft,
+      scores: judge.drafts[judge.approvedDraft - 1]?.scores || {
+        depth: 7,
+        accuracy: 7,
+        clarity: 7,
+        newsworthiness: 7,
+        audio_readiness: 7,
+      },
+    },
+    qa_events: [],
+    total_duration_ms: totalDurationMs,
+    total_cost_usd: totalCostUsd,
+  };
+
+  // Record episodic memory for learning
+  recordEpisodicMemory(runRecord, taskCategory);
 
   return {
     task,
@@ -246,6 +230,7 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
     agents,
     totalDurationMs,
     totalCostUsd,
+    run_record: runRecord,
   };
 }
 

@@ -3,6 +3,7 @@ import { App } from './App'
 import { HomePage } from '../pages/home-page'
 import { ObservabilityPage } from '../pages/observability-page'
 import { LivePage } from '../pages/live-page'
+import { EvalPage } from '../pages/eval-page'
 
 export const router = createBrowserRouter([
   {
@@ -16,6 +17,10 @@ export const router = createBrowserRouter([
       {
         path: 'observability',
         element: <ObservabilityPage />,
+      },
+      {
+        path: 'eval',
+        element: <EvalPage />,
       },
     ],
   },

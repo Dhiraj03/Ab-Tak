@@ -1,31 +1,28 @@
 import { v4 as uuidv4 } from 'uuid';
-import { runHourOnePipeline } from './pipeline';
+import { runFullPipeline, createPipelinePlan, type PipelinePlan, recordEpisodicMemory, queryMemory, getSemanticMemory, getAllMemories, type MemoryContext } from './pipeline';
 import { fetchFeeds } from './feeds';
-import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, Headline, QaEvent } from './types';
+import { runQaAgent } from './agents';
+import { runFullEvalSet, generateEvalReport } from './eval-runner';
+import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, Headline, EditorBrief } from './types';
+import type { EvalRun } from './eval-types';
+
+const runs = new Map<string, RunRecord>();
+const evalRuns = new Map<string, EvalRun>();
+const pipelinePlans = new Map<string, PipelinePlan>();
+let lastRunBrief: EditorBrief | null = null;
+let lastRunTranscript = '';
 
 export interface Env {
   OR_API_KEY: string;
-  ELEVENLABS_API_KEY?: string;
-  DB: D1Database;
-}
-
-// Initialize D1 schema on first use
-async function initDB(db: D1Database): Promise<void> {
-  try {
-    await db.exec(`CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, task TEXT NOT NULL, status TEXT NOT NULL, total_duration_ms INTEGER NOT NULL, total_cost_usd REAL NOT NULL, transcript TEXT NOT NULL, audio_url TEXT, sources_json TEXT NOT NULL, judge_json TEXT NOT NULL, agents_json TEXT NOT NULL, qa_events_json TEXT NOT NULL)`);
-  } catch (error) {
-    console.error('DB initialization error:', error);
-    // Continue even if table exists - don't block requests
-  }
+  ELEVENLABS_API_KEY: string;
 }
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: any): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
 
-    // CORS headers
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -37,47 +34,39 @@ export default {
     }
 
     try {
-      // Health check - no DB needed
-      if (path === '/health' && method === 'GET') {
-        return new Response(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Initialize DB for all other routes
-      await initDB(env.DB);
-
-      // POST /api/generate - Generate a new bulletin
       if (path === '/api/generate' && method === 'POST') {
-        const body = await request.json() as GenerateRequest;
+        const body = await request.json() as GenerateRequest & { use_dynamic_planning?: boolean };
         const runId = uuidv4();
         
-        // Run the pipeline with API keys from env
-        console.log("Backend: OR_API_KEY present:", !!env.OR_API_KEY, "ELEVENLABS_API_KEY present:", !!env.ELEVENLABS_API_KEY);
-        const result = await runHourOnePipeline(
-          body.task, 
-          env.OR_API_KEY,
-          env.ELEVENLABS_API_KEY
-        );
+        // Generate plan if dynamic planning is requested
+        let plan: PipelinePlan | undefined;
+        if (body.use_dynamic_planning) {
+          plan = await createPipelinePlan(body.task, env.OR_API_KEY);
+          pipelinePlans.set(plan.plan_id, plan);
+        }
         
-        // Create the response
-        const response: GenerateResponse = {
+        const result = await runFullPipeline(body.task, env.ELEVENLABS_API_KEY);
+        
+        lastRunBrief = result.brief;
+        lastRunTranscript = result.transcript;
+
+        const audioUrl = result.audioBase64 ? result.audioBase64 : result.audioUrl;
+
+        const response: GenerateResponse & { plan_id?: string; task_analysis?: any } = {
           runId,
           status: 'completed',
-          audioUrl: result.audioBase64 || result.audioUrl || '',
+          audioUrl,
           transcript: result.transcript,
           sources: result.sources,
           judge: result.judge,
-          agents: result.agents,
-          totalDurationMs: result.totalDurationMs,
-          totalCostUsd: result.totalCostUsd,
-          debug: {
-            orKeyPresent: !!env.OR_API_KEY,
-            elevenLabsKeyPresent: !!env.ELEVENLABS_API_KEY,
-          },
         };
+        
+        // Include plan info if dynamic planning was used
+        if (plan) {
+          response.plan_id = plan.plan_id;
+          response.task_analysis = plan.task_analysis;
+        }
 
-        // Store the run in D1
         const runRecord: RunRecord = {
           run_id: runId,
           timestamp: new Date().toISOString(),
@@ -86,177 +75,69 @@ export default {
           agents: result.agents,
           transcript: result.transcript,
           sources: result.sources,
-          audio_url: result.audioBase64 || result.audioUrl || '',
+          audio_url: audioUrl,
           judge: result.judge,
           qa_events: [],
           total_duration_ms: result.totalDurationMs,
           total_cost_usd: result.totalCostUsd,
         };
-
-        await env.DB.prepare(
-          `INSERT INTO runs (run_id, timestamp, task, status, total_duration_ms, total_cost_usd, 
-            transcript, audio_url, sources_json, judge_json, agents_json, qa_events_json)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(
-          runRecord.run_id,
-          runRecord.timestamp,
-          runRecord.task,
-          runRecord.status,
-          runRecord.total_duration_ms,
-          runRecord.total_cost_usd,
-          runRecord.transcript,
-          runRecord.audio_url,
-          JSON.stringify(runRecord.sources),
-          JSON.stringify(runRecord.judge),
-          JSON.stringify(runRecord.agents),
-          JSON.stringify(runRecord.qa_events)
-        ).run();
+        runs.set(runId, runRecord);
 
         return new Response(JSON.stringify(response), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // POST /api/qa - Answer a question grounded in run context
       if (path === '/api/qa' && method === 'POST') {
         const body = await request.json() as QaRequest;
         
-        // Get the run from D1
-        const runRow = await env.DB.prepare(
-          'SELECT transcript, sources_json FROM runs WHERE run_id = ?'
-        ).bind(body.runId).first();
-
-        let answer: string;
-        let agent: string;
-        let sources: { title: string; url: string; source?: string }[] = [];
-
-        if (runRow) {
-          const transcript = runRow.transcript as string;
-          const sourcesData = JSON.parse(runRow.sources_json as string);
-          
-          // Grounded Q&A based on run context
-          const question = body.question.toLowerCase();
-          
-          if (question.includes('background') || question.includes('context') || question.includes('what is') || question.includes('who is')) {
-            agent = 'Context Agent';
-            answer = `Based on this bulletin, the main story discusses: ${transcript.slice(0, 200)}... This information comes from the generated broadcast transcript.`;
-          } else if (question.includes('source') || question.includes('where') || question.includes('from')) {
-            agent = 'Fact Agent';
-            const source = sourcesData[0];
-            if (source) {
-              answer = `According to ${source.source || 'the source'}: ${source.title}. You can view the original at the link provided.`;
-              sources = [{ title: source.title, url: source.url, source: source.source }];
-            } else {
-              answer = 'The sources for this bulletin were aggregated from live RSS feeds and processed through the editorial pipeline.';
-            }
-          } else {
-            agent = 'Summary Agent';
-            answer = `From this bulletin: ${transcript.slice(0, 300)}... The full transcript contains more details about these stories.`;
-          }
+        let qaResult;
+        if (lastRunBrief && lastRunTranscript) {
+          qaResult = runQaAgent(body.question, lastRunBrief, lastRunTranscript);
         } else {
-          agent = 'Context Agent';
-          answer = 'Unable to find the referenced bulletin. It may have expired or been removed.';
+          qaResult = {
+            agent: 'Fact Agent',
+            answer: 'No bulletin has been generated yet. Please generate a bulletin first.',
+            relatedStory: null,
+            sources: [],
+          };
         }
 
-        const durationMs = Math.round(500 + Math.random() * 1000);
-
-        const qaResponse: QaResponse = {
-          agent,
-          answer,
-          sources,
-          durationMs,
+        const response: QaResponse = {
+          agent: qaResult.agent,
+          answer: qaResult.answer,
+          sources: qaResult.sources,
+          durationMs: 500,
         };
 
-        // Store the QA event
-        const qaEvent: QaEvent = {
-          question: body.question,
-          agent_spawned: agent,
-          answer,
-          duration_ms: durationMs,
-          cost_usd: 0.001,
-          tokens: 150,
-        };
-
-        // Update run with QA event
-        await env.DB.prepare(
-          `UPDATE runs SET qa_events_json = 
-            CASE 
-              WHEN qa_events_json = '[]' THEN json_array(json(?))
-              ELSE json_insert(qa_events_json, '$[#]', json(?))
-            END
-          WHERE run_id = ?`
-        ).bind(
-          JSON.stringify(qaEvent),
-          JSON.stringify(qaEvent),
-          body.runId
-        ).run();
-
-        return new Response(JSON.stringify(qaResponse), {
+        return new Response(JSON.stringify(response), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // GET /api/runs - List all runs
       if (path === '/api/runs' && method === 'GET') {
-        const { results } = await env.DB.prepare(
-          'SELECT * FROM runs ORDER BY timestamp DESC LIMIT 50'
-        ).all();
-
-        const runList: RunRecord[] = (results || []).map((row) => ({
-          run_id: row.run_id as string,
-          timestamp: row.timestamp as string,
-          task: row.task as string,
-          status: row.status as string,
-          total_duration_ms: row.total_duration_ms as number,
-          total_cost_usd: row.total_cost_usd as number,
-          transcript: row.transcript as string,
-          audio_url: row.audio_url as string,
-          sources: JSON.parse(row.sources_json as string),
-          judge: JSON.parse(row.judge_json as string),
-          agents: JSON.parse(row.agents_json as string),
-          qa_events: JSON.parse(row.qa_events_json as string),
-        }));
-
+        const runList = Array.from(runs.values());
         return new Response(JSON.stringify(runList), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // GET /api/runs/:id - Get a specific run
       if (path.startsWith('/api/runs/') && method === 'GET') {
         const runId = path.replace('/api/runs/', '');
-        const row = await env.DB.prepare(
-          'SELECT * FROM runs WHERE run_id = ?'
-        ).bind(runId).first();
+        const run = runs.get(runId);
         
-        if (!row) {
+        if (!run) {
           return new Response(JSON.stringify({ error: 'Run not found' }), {
             status: 404,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
 
-        const run: RunRecord = {
-          run_id: row.run_id as string,
-          timestamp: row.timestamp as string,
-          task: row.task as string,
-          status: row.status as string,
-          total_duration_ms: row.total_duration_ms as number,
-          total_cost_usd: row.total_cost_usd as number,
-          transcript: row.transcript as string,
-          audio_url: row.audio_url as string,
-          sources: JSON.parse(row.sources_json as string),
-          judge: JSON.parse(row.judge_json as string),
-          agents: JSON.parse(row.agents_json as string),
-          qa_events: JSON.parse(row.qa_events_json as string),
-        };
-
         return new Response(JSON.stringify(run), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // GET /api/headlines - Get rotating headlines
       if (path === '/api/headlines' && method === 'GET') {
         const stories = await fetchFeeds();
         const headlines: Headline[] = stories.slice(0, 15).map((story, index) => ({
@@ -273,16 +154,244 @@ export default {
         });
       }
 
-      // 404 for unknown routes
+      if (path === '/api/eval/run' && method === 'POST') {
+        // Start automated eval run
+        const evalPromise = runFullEvalSet(
+          env.OR_API_KEY,
+          env.ELEVENLABS_API_KEY,
+          (completed, total, currentTask) => {
+            console.log(`[Eval Progress] ${completed}/${total}: ${currentTask}`);
+          }
+        );
+
+        // Store the promise and return immediately with eval_run_id
+        const pendingEvalRun: EvalRun = {
+          eval_run_id: 'eval-' + uuidv4(),
+          timestamp: new Date().toISOString(),
+          status: 'running',
+          results: [],
+          summary: {
+            total_tasks: 5,
+            passed_count: 0,
+            failed_count: 0,
+            average_score: 0,
+            total_duration_ms: 0,
+            total_cost_usd: 0,
+          },
+          version: '1.0.0',
+        };
+        
+        evalRuns.set(pendingEvalRun.eval_run_id, pendingEvalRun);
+
+        // Run eval asynchronously and update when done
+        evalPromise.then((completedEvalRun) => {
+          evalRuns.set(completedEvalRun.eval_run_id, completedEvalRun);
+          console.log(`[Eval Complete] ${completedEvalRun.eval_run_id} - Score: ${completedEvalRun.summary.average_score}`);
+        }).catch((error) => {
+          console.error('[Eval Error]', error);
+        });
+
+        return new Response(JSON.stringify({
+          eval_run_id: pendingEvalRun.eval_run_id,
+          status: 'running',
+          message: 'Evaluation started. Poll /api/eval/runs/:id for results.',
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/eval/runs' && method === 'GET') {
+        // List all eval runs
+        const evalList = Array.from(evalRuns.values()).sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        return new Response(JSON.stringify(evalList), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path.startsWith('/api/eval/runs/') && method === 'GET') {
+        const evalRunId = path.replace('/api/eval/runs/', '');
+        const evalRun = evalRuns.get(evalRunId);
+        
+        if (!evalRun) {
+          return new Response(JSON.stringify({ error: 'Eval run not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        return new Response(JSON.stringify(evalRun), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path.startsWith('/api/eval/runs/') && path.endsWith('/report') && method === 'GET') {
+        const evalRunId = path.replace('/api/eval/runs/', '').replace('/report', '');
+        const evalRun = evalRuns.get(evalRunId);
+        
+        if (!evalRun) {
+          return new Response(JSON.stringify({ error: 'Eval run not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const report = generateEvalReport(evalRun);
+        return new Response(report, {
+          headers: { ...corsHeaders, 'Content-Type': 'text/markdown' },
+        });
+      }
+
+      if (path === '/api/eval/compare' && method === 'GET') {
+        // Compare latest two eval runs
+        const evalList = Array.from(evalRuns.values())
+          .filter(e => e.status === 'completed')
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          .slice(0, 2);
+
+        if (evalList.length < 2) {
+          return new Response(JSON.stringify({ 
+            error: 'Need at least 2 completed eval runs to compare',
+            available: evalList.length 
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const [current, previous] = evalList;
+        const scoreDiff = current.summary.average_score - previous.summary.average_score;
+        const passedDiff = current.summary.passed_count - previous.summary.passed_count;
+
+        return new Response(JSON.stringify({
+          current: {
+            eval_run_id: current.eval_run_id,
+            timestamp: current.timestamp,
+            score: current.summary.average_score,
+            passed: current.summary.passed_count,
+          },
+          previous: {
+            eval_run_id: previous.eval_run_id,
+            timestamp: previous.timestamp,
+            score: previous.summary.average_score,
+            passed: previous.summary.passed_count,
+          },
+          improvement: {
+            score_delta: parseFloat(scoreDiff.toFixed(2)),
+            passed_delta: passedDiff,
+            percentage: previous.summary.average_score > 0 
+              ? parseFloat(((scoreDiff / previous.summary.average_score) * 100).toFixed(1))
+              : 0,
+          },
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/eval/set' && method === 'GET') {
+        // Return the eval set definition
+        const { STANDARD_EVAL_SET } = await import('./eval-types');
+        return new Response(JSON.stringify(STANDARD_EVAL_SET), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/plan' && method === 'POST') {
+        // Generate pipeline plan for a task
+        const body = await request.json() as { task: string };
+        const plan = await createPipelinePlan(body.task, env.OR_API_KEY);
+        
+        // Store the plan
+        pipelinePlans.set(plan.plan_id, plan);
+        
+        return new Response(JSON.stringify(plan), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/plans' && method === 'GET') {
+        // List all stored plans
+        const plans = Array.from(pipelinePlans.values()).sort((a, b) => 
+          new Date(b.plan_id.split('-')[1] || 0).getTime() - new Date(a.plan_id.split('-')[1] || 0).getTime()
+        );
+        return new Response(JSON.stringify(plans), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path.startsWith('/api/plans/') && method === 'GET') {
+        const planId = path.replace('/api/plans/', '');
+        const plan = pipelinePlans.get(planId);
+        
+        if (!plan) {
+          return new Response(JSON.stringify({ error: 'Plan not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        return new Response(JSON.stringify(plan), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/memory/query' && method === 'POST') {
+        // Query episodic memory
+        const body = await request.json() as { task_category?: string; limit?: number; min_score?: number };
+        const memoryContext = queryMemory({
+          task_category: body.task_category,
+          limit: body.limit || 5,
+          min_score: body.min_score,
+          recency_days: 7,
+        });
+        
+        return new Response(JSON.stringify(memoryContext), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/memory/episodic' && method === 'GET') {
+        // Get all episodic memories
+        const memories = getAllMemories();
+        return new Response(JSON.stringify(memories.slice(0, 20)), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/memory/semantic' && method === 'GET') {
+        // Get semantic memory (learned patterns)
+        const semantic = getSemanticMemory();
+        // Convert Maps to objects for JSON serialization
+        const response = {
+          source_credibility: Object.fromEntries(semantic.source_credibility),
+          task_patterns: Object.fromEntries(semantic.task_patterns),
+          effective_patterns: semantic.effective_patterns,
+          last_updated: semantic.last_updated,
+        };
+        return new Response(JSON.stringify(response), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/health' && method === 'GET') {
+        return new Response(JSON.stringify({ 
+          status: 'ok', 
+          timestamp: new Date().toISOString(),
+          features: ['generate', 'qa', 'runs', 'eval']
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       return new Response(JSON.stringify({ error: 'Not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('API Error:', error);
-      return new Response(JSON.stringify({ error: 'Internal server error', details: errorMessage }), {
+      return new Response(JSON.stringify({ error: 'Internal server error', details: String(error) }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

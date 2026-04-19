@@ -1,8 +1,8 @@
 import { config } from './config'
-import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, HeadlinesResponse } from './types'
+import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, HeadlinesResponse, EvalRun, EvalSet } from './types'
 
-// Use fixtures only if explicitly configured with empty API URL
-const USE_FIXTURES = config.apiBaseUrl === ''
+// Only use fixtures in development mode when explicitly enabled
+const USE_FIXTURES = import.meta.env.DEV && !config.apiBaseUrl
 
 function delay(ms: number) {
   return new Promise((resolve) => {
@@ -113,4 +113,83 @@ export async function fetchHeadlines(): Promise<HeadlinesResponse> {
   }
 
   return apiFetch<HeadlinesResponse>('/api/headlines')
+}
+
+// Eval API endpoints
+export async function startEvalRun(): Promise<{ eval_run_id: string; status: string; message: string }> {
+  if (USE_FIXTURES) {
+    await delay(1000)
+    return {
+      eval_run_id: 'dev-eval-' + Date.now(),
+      status: 'running',
+      message: 'Development mode: Mock eval started',
+    }
+  }
+
+  return apiFetch<{ eval_run_id: string; status: string; message: string }>('/api/eval/run', {
+    method: 'POST',
+  })
+}
+
+export async function listEvalRuns(): Promise<EvalRun[]> {
+  if (USE_FIXTURES) {
+    await delay(250)
+    return []
+  }
+
+  return apiFetch<EvalRun[]>('/api/eval/runs')
+}
+
+export async function getEvalRun(evalRunId: string): Promise<EvalRun | null> {
+  if (USE_FIXTURES) {
+    await delay(250)
+    return null
+  }
+
+  return apiFetch<EvalRun>(`/api/eval/runs/${evalRunId}`)
+}
+
+export async function getEvalReport(evalRunId: string): Promise<string> {
+  if (USE_FIXTURES) {
+    await delay(250)
+    return '# Development Mode\n\nMock eval report'
+  }
+
+  const response = await fetch(`${config.apiBaseUrl}/api/eval/runs/${evalRunId}/report`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch eval report: ${response.status}`)
+  }
+  return response.text()
+}
+
+export async function compareEvalRuns(): Promise<{
+  current: { eval_run_id: string; timestamp: string; score: number; passed: number }
+  previous: { eval_run_id: string; timestamp: string; score: number; passed: number }
+  improvement: { score_delta: number; passed_delta: number; percentage: number }
+}> {
+  if (USE_FIXTURES) {
+    await delay(250)
+    return {
+      current: { eval_run_id: 'current', timestamp: new Date().toISOString(), score: 7.5, passed: 4 },
+      previous: { eval_run_id: 'previous', timestamp: new Date().toISOString(), score: 7.0, passed: 3 },
+      improvement: { score_delta: 0.5, passed_delta: 1, percentage: 7.1 },
+    }
+  }
+
+  return apiFetch('/api/eval/compare')
+}
+
+export async function getEvalSet(): Promise<EvalSet> {
+  if (USE_FIXTURES) {
+    await delay(250)
+    return {
+      name: 'Development Eval Set',
+      description: 'Mock eval set for development',
+      tasks: [],
+      scoring_guide: {},
+      pass_threshold: { minimum_average: 6.5, no_single_score_below: 5 },
+    }
+  }
+
+  return apiFetch<EvalSet>('/api/eval/set')
 }

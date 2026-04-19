@@ -105,3 +105,53 @@ export interface RunRecord {
   total_duration_ms: number
   total_cost_usd: number
 }
+
+// Evaluation system types
+export interface EvalTask {
+  id: string
+  task: string
+  expected_dimensions: string[]
+  notes: string
+}
+
+export interface EvalResult {
+  task_id: string
+  task_description: string
+  run_id: string
+  timestamp: string
+  judge_scores: JudgeScores
+  overall_score: number
+  passed: boolean
+  duration_ms: number
+  cost_usd: number
+  transcript_length: number
+  sources_count: number
+  errors?: string[]
+}
+
+export interface EvalRun {
+  eval_run_id: string
+  timestamp: string
+  status: 'running' | 'completed' | 'failed'
+  results: EvalResult[]
+  summary: {
+    total_tasks: number
+    passed_count: number
+    failed_count: number
+    average_score: number
+    total_duration_ms: number
+    total_cost_usd: number
+  }
+  version: string
+}
+
+export interface EvalSet {
+  name: string
+  description: string
+  tasks: EvalTask[]
+  scoring_guide: { [dimension: string]: string }
+  pass_threshold: {
+    minimum_average: number
+    no_single_score_below: number
+  }
+}

@@ -15,6 +15,7 @@ export function App() {
             </NavLink>
             <NavLink to="/live">Live</NavLink>
             <NavLink to="/observability">Observability</NavLink>
+            <NavLink to="/eval">Eval</NavLink>
           </nav>
         </div>
       </header>
