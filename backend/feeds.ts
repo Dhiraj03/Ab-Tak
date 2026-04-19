@@ -198,6 +198,40 @@ function resolveUrl(src: string, baseUrl: string): string {
   return new URL(src, baseUrl).href;
 }
 
+// Extract image from RSS item (media:content, enclosure, or content)
+function extractRssImage(item: any): string | null {
+  // Try media:content
+  if (item['media:content']?.$?.url) {
+    return item['media:content'].$.url;
+  }
+  if (Array.isArray(item['media:content']) && item['media:content'][0]?.$?.url) {
+    return item['media:content'][0].$.url;
+  }
+  
+  // Try enclosure
+  if (item.enclosure?.url) {
+    return item.enclosure.url;
+  }
+  
+  // Try content encoded with img tag
+  if (item['content:encoded']) {
+    const imgMatch = item['content:encoded'].match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (imgMatch) {
+      return imgMatch[1];
+    }
+  }
+  
+  // Try content with img tag
+  if (item.content) {
+    const imgMatch = item.content.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (imgMatch) {
+      return imgMatch[1];
+    }
+  }
+  
+  return null;
+}
+
 // Fetch stories with images and summaries
 export async function fetchStoriesWithImages(
   feeds: FeedSource[] = DEFAULT_FEEDS,
@@ -216,15 +250,18 @@ export async function fetchStoriesWithImages(
       feeds.map(async (feed) => {
         const parsed = await parser.parseURL(feed.url);
 
-        return (parsed.items ?? []).slice(0, perFeedLimit).map((item, index) => ({
-          id: makeStoryId(item.link ?? `${feed.name}-${index}`, index),
-          title: normalizeText(item.title),
-          link: item.link ?? "",
-          source: feed.name,
-          publishedAt: item.isoDate ?? item.pubDate ?? new Date().toISOString(),
-          summary: normalizeText(item.contentSnippet ?? item.content ?? item.summary).slice(0, 200),
-          imageUrl: null as string | null,
-        }));
+        return (parsed.items ?? []).slice(0, perFeedLimit).map((item, index) => {
+          const rssImage = extractRssImage(item);
+          return {
+            id: makeStoryId(item.link ?? `${feed.name}-${index}`, index),
+            title: normalizeText(item.title),
+            link: item.link ?? "",
+            source: feed.name,
+            publishedAt: item.isoDate ?? item.pubDate ?? new Date().toISOString(),
+            summary: normalizeText(item.contentSnippet ?? item.content ?? item.summary).slice(0, 200),
+            imageUrl: rssImage,
+          };
+        });
       }),
     );
 
@@ -237,9 +274,12 @@ export async function fetchStoriesWithImages(
       return MOCK_STORIES.map(s => ({ ...s, imageUrl: null }));
     }
 
-    // Fetch images for each story
+    // Fetch images for stories that don't have one from RSS
     const storiesWithImages = await Promise.all(
       stories.slice(0, 6).map(async (story) => {
+        if (story.imageUrl) {
+          return story; // Already has image from RSS
+        }
         try {
           const imageUrl = await extractArticleImage(story.link);
           return { ...story, imageUrl };

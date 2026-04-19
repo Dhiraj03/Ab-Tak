@@ -26,6 +26,28 @@ export function LivePage() {
     generateBroadcast()
   }, [])
 
+  // Auto-start audio when broadcast is ready (after user interaction)
+  useEffect(() => {
+    if (!broadcast?.audioUrl || isPlayingAudio) return
+    
+    // Try to auto-play once broadcast is loaded
+    const autoPlayTimer = setTimeout(() => {
+      if (audioRef.current && broadcast.audioUrl) {
+        audioRef.current.src = broadcast.audioUrl
+        audioRef.current.play().then(() => {
+          console.log('Auto-play started')
+          setIsPlayingAudio(true)
+          setAudioContextReady(true)
+        }).catch((err) => {
+          console.log('Auto-play blocked, waiting for user interaction:', err)
+          // Browser blocked autoplay - show the button
+        })
+      }
+    }, 500)
+    
+    return () => clearTimeout(autoPlayTimer)
+  }, [broadcast])
+
   // Rotate stories based on audio time
   useEffect(() => {
     if (!broadcast || !isPlayingAudio || broadcast.stories.length <= 1) return

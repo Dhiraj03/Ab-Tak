@@ -28,11 +28,11 @@ export function NewsAnchorAvatar({ audioElement, isPlaying = false, title = 'AB 
     return () => clearInterval(blinkInterval)
   }, [])
 
-  // Determine mouth state based on audio level
+  // Determine mouth state based on audio level - more responsive for speech
   const getMouthState = (): 'closed' | 'mid' | 'open' => {
     if (!isPlaying) return 'closed'
-    if (audioLevel < 0.05) return 'closed'
-    if (audioLevel < 0.15) return 'mid'
+    if (audioLevel < 0.02) return 'closed'
+    if (audioLevel < 0.08) return 'mid'
     return 'open'
   }
 
