@@ -31,12 +31,25 @@ export async function generateAudio(text: string, apiKey?: string): Promise<stri
 
     if (!response.ok) {
       const err = await response.text();
-      console.warn("ElevenLabs error:", err);
+      console.error("ElevenLabs error:", response.status, err.slice(0, 200));
       return null;
     }
 
+    console.log("ElevenLabs response OK, processing audio...");
     const buffer = await response.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    console.log("Audio buffer size:", buffer.byteLength, "bytes");
+    
+    // Convert to base64 using chunks to avoid stack overflow
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.slice(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    const base64 = btoa(binary);
+    
+    console.log("Base64 encoded, length:", base64.length);
 
     // Return as data URL
     return JSON.stringify({ 

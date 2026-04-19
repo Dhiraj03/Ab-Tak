@@ -137,9 +137,12 @@ export async function runLivePipeline(
   totalCostUsd += judgeCost;
 
   // Step 6: Generate audio
+  console.log("Generating audio with key:", elevenLabsKey ? "Present" : "Missing");
   const voiceStart = performance.now();
   const audioResult = await generateAudio(judge.finalScript, elevenLabsKey);
   const voiceDuration = Math.round(performance.now() - voiceStart);
+  
+  console.log("Audio result:", audioResult ? "Success" : "Failed/null");
   
   let audioBase64 = "";
   let audioUrl = "";
@@ -149,15 +152,20 @@ export async function runLivePipeline(
       const parsed = JSON.parse(audioResult);
       audioBase64 = parsed.base64 || "";
       audioUrl = parsed.url || "";
-    } catch {
+      console.log("Audio parsed successfully, length:", audioUrl?.length || 0);
+    } catch (e) {
+      console.error("Failed to parse audio result:", e);
       audioBase64 = audioResult;
+      audioUrl = audioResult;
     }
+  } else {
+    console.error("Audio generation returned null");
   }
   
   agents.push({
     name: "Voice Agent",
     input: `Script: ${judge.finalScript.slice(0, 100)}...`,
-    output_summary: audioResult ? "Generated audio" : "Audio skipped",
+    output_summary: audioResult ? `Generated audio (${audioUrl?.length || 0} chars)` : "Audio failed",
     duration_ms: voiceDuration,
     cost_usd: audioResult ? 0.02 : 0,
     tokens: 0,
