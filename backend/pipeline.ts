@@ -3,6 +3,8 @@ import { fetchFeeds } from "./feeds";
 import { generateAudio } from "./tts";
 import { createPipelinePlan, type PipelinePlan } from "./manager-agent";
 import { recordEpisodicMemory, generateMemoryContextForTask, type MemoryContext } from "./memory";
+import { evaluateRunForAlerts } from "./alerts";
+import { createWorkingMemory, getWorkingMemoryStatus, transferToEpisodicMemory } from "./working-memory";
 import type { AgentTrace, SourceLink, JudgeSummary, RunRecord } from "./types";
 
 // Re-export for use in other modules
@@ -15,6 +17,8 @@ export {
   getAllMemories,
   type MemoryContext 
 } from "./memory";
+export { evaluateRunForAlerts, getActiveAlerts, getAllAlerts, getAlertStats, getSystemHealth, acknowledgeAlert } from "./alerts";
+export { createWorkingMemory, getWorkingMemoryStatus, transferToEpisodicMemory } from "./working-memory";
 
 export type PipelineResult = {
   task: string;
@@ -62,6 +66,9 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
   
   // Query memory for context
   const memoryContext = generateMemoryContextForTask(task, taskCategory);
+  
+  // Create working memory for this run
+  createWorkingMemory(runId, task);
 
   // Monitor Agent - fetch and rank stories
   const monitorStart = performance.now();
@@ -206,6 +213,12 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
 
   // Record episodic memory for learning
   recordEpisodicMemory(runRecord, taskCategory);
+  
+  // Transfer working memory to episodic
+  transferToEpisodicMemory(runId, runRecord);
+  
+  // Evaluate for alerts and trigger self-healing
+  evaluateRunForAlerts(runRecord);
 
   return {
     task,

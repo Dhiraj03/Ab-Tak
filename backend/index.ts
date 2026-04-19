@@ -4,12 +4,17 @@ import { fetchFeeds } from './feeds';
 import { runQaAgent } from './agents';
 import { runFullEvalSet, generateEvalReport } from './eval-runner';
 import { runLivePipeline } from './live-pipeline';
+import { createAgentSwarm, getSwarm, getAllSwarms, getSwarmStatus, type AgentSwarm } from './emergent-agents';
+import { getWorkingMemoryStatus, createWorkingMemory, type WorkingMemory } from './working-memory';
+import { evaluateRunForAlerts, getActiveAlerts, getAllAlerts, getAlertStats, getSystemHealth, acknowledgeAlert } from './alerts';
 import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, Headline, EditorBrief, GenerateLiveRequest, GenerateLiveResponse } from './types';
 import type { EvalRun } from './eval-types';
 
 const runs = new Map<string, RunRecord>();
 const evalRuns = new Map<string, EvalRun>();
 const pipelinePlans = new Map<string, PipelinePlan>();
+const activeSwarms = new Map<string, AgentSwarm>();
+const workingMemories = new Map<string, WorkingMemory>();
 let lastRunBrief: EditorBrief | null = null;
 let lastRunTranscript = '';
 
@@ -412,6 +417,84 @@ export default {
           last_updated: semantic.last_updated,
         };
         return new Response(JSON.stringify(response), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/swarm/create' && method === 'POST') {
+        // Create emergent agent swarm
+        const body = await request.json() as { task: string; capability: string };
+        const swarm = await createAgentSwarm(body.task, body.capability as any, env.OR_API_KEY);
+        activeSwarms.set(swarm.swarm_id, swarm);
+        
+        return new Response(JSON.stringify({
+          swarm_id: swarm.swarm_id,
+          status: 'created',
+          agent_count: swarm.agents.size,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/swarm' && method === 'GET') {
+        // List all swarms
+        const swarms = getAllSwarms().map(s => getSwarmStatus(s.swarm_id));
+        return new Response(JSON.stringify(swarms), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path.startsWith('/api/swarm/') && method === 'GET') {
+        const swarmId = path.replace('/api/swarm/', '');
+        const status = getSwarmStatus(swarmId);
+        
+        if (!status) {
+          return new Response(JSON.stringify({ error: 'Swarm not found' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        return new Response(JSON.stringify(status), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/alerts' && method === 'GET') {
+        // Get all alerts
+        const activeOnly = url.searchParams.get('active') === 'true';
+        const alerts = activeOnly ? getActiveAlerts() : getAllAlerts(100);
+        return new Response(JSON.stringify(alerts), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/alerts/stats' && method === 'GET') {
+        // Get alert statistics
+        const stats = getAlertStats();
+        return new Response(JSON.stringify(stats), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/alerts/ack' && method === 'POST') {
+        // Acknowledge an alert
+        const body = await request.json() as { alert_id: string };
+        const success = acknowledgeAlert(body.alert_id);
+        return new Response(JSON.stringify({ success }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (path === '/api/health' && method === 'GET') {
+        // System health with alerting
+        const health = getSystemHealth();
+        return new Response(JSON.stringify({
+          ...health,
+          timestamp: new Date().toISOString(),
+          version: '2.0.0',
+          features: ['generate', 'qa', 'runs', 'eval', 'planning', 'memory', 'alerts', 'emergent'],
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }

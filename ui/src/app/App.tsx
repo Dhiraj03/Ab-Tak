@@ -1,6 +1,15 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, Navigate } from 'react-router-dom'
 
 export function App() {
+  // Check if user has completed onboarding
+  const hasOnboarded = localStorage.getItem('ab-tak-onboarded') === 'true'
+  const isOnboarding = window.location.pathname === '/onboarding'
+  
+  // Redirect to onboarding if not completed
+  if (!hasOnboarded && !isOnboarding) {
+    return <Navigate to="/onboarding" replace />
+  }
+
   return (
     <div className="app-shell">
       <header className="site-header">

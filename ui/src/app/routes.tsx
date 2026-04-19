@@ -4,8 +4,13 @@ import { HomePage } from '../pages/home-page'
 import { ObservabilityPage } from '../pages/observability-page'
 import { LivePage } from '../pages/live-page'
 import { EvalPage } from '../pages/eval-page'
+import { OnboardingWizard } from '../pages/onboarding-page'
 
 export const router = createBrowserRouter([
+  {
+    path: '/onboarding',
+    element: <OnboardingWizard />,
+  },
   {
     path: '/',
     element: <App />,
