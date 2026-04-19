@@ -43,29 +43,27 @@ export type EditorBrief = {
   signOff: string;
 };
 
-// API Contract Types
-export interface SourceLink {
-  title: string;
-  url: string;
-  source?: string;
-}
-
-export interface JudgeScores {
+export type JudgeScores = {
   depth: number;
   accuracy: number;
   clarity: number;
   newsworthiness: number;
   audio_readiness: number;
-}
+};
 
-export interface JudgeSummary {
-  approvedDraft: number;
+export type JudgeDraft = {
+  draft: number;
   scores: JudgeScores;
-}
+  overall: number;
+  rewrite_triggered: boolean;
+  rewrite_instruction?: string;
+};
 
-export interface GenerateRequest {
-  task: string;
-}
+export type JudgeResult = {
+  approvedDraft: number;
+  drafts: JudgeDraft[];
+  finalScript: string;
+};
 
 export interface GenerateResponse {
   runId: string;
@@ -130,3 +128,8 @@ export interface Headline {
   publishedAt: string;
   priority: 'high' | 'medium' | 'low';
 }
+export type SourceLink = {
+  title: string;
+  url: string;
+  source?: string;
+};

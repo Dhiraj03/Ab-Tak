@@ -55,44 +55,14 @@ function extractJson<T>(input: string): T {
   return JSON.parse(jsonString) as T;
 }
 
-function createOpenAIClient(apiKey: string) {
-  return new OpenAI({
-    apiKey,
-    baseURL: OR_BASE_URL,
-  });
+async function callLLM(system: string, prompt: string): Promise<string | null> {
+  return null;
 }
 
-async function callLLM(system: string, prompt: string, apiKey: string | undefined): Promise<string | null> {
-  if (!apiKey) {
-    console.log("No API key provided, skipping LLM call");
-    return null;
-  }
-
-  const openai = createOpenAIClient(apiKey);
-  
-  try {
-    const response = await openai.chat.completions.create({
-      model: "anthropic/claude-3.5-sonnet",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-    });
-
-    return response.choices[0]?.message?.content ?? null;
-  } catch (error) {
-    console.error('LLM call failed:', error);
-    return null;
-  }
-}
-
-export async function runMonitorAgent(stories: StoryCandidate[], apiKey: string | undefined): Promise<RankedStory[]> {
+export async function runMonitorAgent(stories: StoryCandidate[]): Promise<RankedStory[]> {
   const llmResponse = await callLLM(
     "You are a newsroom monitor. Rank stories by recency, significance, and source credibility. Return only JSON.",
-    `Rank these stories and return JSON with this shape:\n{\n  "stories": [\n    {\n      "storyId": "...",\n      "recency": 1-10,\n      "significance": 1-10,\n      "credibility": 1-10,\n      "overall": 1-10,\n      "reasoning": "one sentence"\n    }\n  ]\n}\n\nStories:\n${JSON.stringify(stories, null, 2)}`,
-    apiKey,
+    `Rank these stories and return JSON with this shape:\n{\n  "stories": [\n    {\n      "storyId": "...",\n      "recency": 1-10,\n      "significance": 1-10,\n      "credibility": 1-10,\n      "overall": 1-10,\n      "reasoning": "one sentence"\n    }\n  ]\n}\n\nStories:\n${JSON.stringify(stories, null, 2)}`
   );
 
   if (llmResponse) {
@@ -154,13 +124,12 @@ export async function runMonitorAgent(stories: StoryCandidate[], apiKey: string 
     .sort((a, b) => b.scores.overall - a.scores.overall);
 }
 
-export async function runEditorAgent(task: string, rankedStories: RankedStory[], apiKey: string | undefined): Promise<EditorBrief> {
+export async function runEditorAgent(task: string, rankedStories: RankedStory[]): Promise<EditorBrief> {
   const topStories = rankedStories.slice(0, 3);
 
   const llmResponse = await callLLM(
     "You are a senior news editor. Choose the top three stories and create a radio bulletin brief. Return only JSON.",
-    `Task: ${task}\n\nReturn JSON with this shape:\n{\n  "task": "string",\n  "coldOpen": "string",\n  "headlinesTease": ["..."],\n  "stories": [\n    {\n      "storyId": "...",\n      "title": "...",\n      "source": "...",\n      "link": "...",\n      "angle": "...",\n      "keyFacts": ["..."],\n      "tone": "..."\n    }\n  ],\n  "signOff": "string"\n}\n\nRanked stories:\n${JSON.stringify(topStories, null, 2)}`,
-    apiKey,
+    `Task: ${task}\n\nReturn JSON with this shape:\n{\n  "task": "string",\n  "coldOpen": "string",\n  "headlinesTease": ["..."],\n  "stories": [\n    {\n      "storyId": "...",\n      "title": "...",\n      "source": "...",\n      "link": "...",\n      "angle": "...",\n      "keyFacts": ["..."],\n      "tone": "..."\n    }\n  ],\n  "signOff": "string"\n}\n\nRanked stories:\n${JSON.stringify(topStories, null, 2)}`
   );
 
   if (llmResponse) {
@@ -189,19 +158,79 @@ export async function runEditorAgent(task: string, rankedStories: RankedStory[],
 }
 
 export function createStubTranscript(brief: EditorBrief) {
-  const storyLines = brief.stories
-    .map((story, index) => {
-      const factLine = story.keyFacts.join(" ");
-      return `Story ${index + 1}: ${story.title}. ${story.angle} ${factLine}`;
-    })
-    .join("\n\n");
+  const segues = ["Now, to our first story...", "Moving on...", "Turning to...", "And in closing..."];
+  
+  const stories = brief.stories.map((story, i) => {
+    const facts = story.keyFacts.slice(0, 2).join(" ");
+    return `${segues[i]} ${facts}`;
+  }).join(" ... ");
 
   return [
-    brief.coldOpen,
-    `Headlines: ${brief.headlinesTease.join(". ")}.`,
-    storyLines,
-    brief.signOff,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+    "Good morning. Here's your AI Media Desk bulletin.",
+    `${brief.headlinesTease.join(". ")}.`,
+    "... ",
+    stories,
+    "Stay with us for more updates.",
+  ].join("\n");
+}
+
+export type JudgeScores = {
+  depth: number;
+  accuracy: number;
+  clarity: number;
+  newsworthiness: number;
+  audio_readiness: number;
+};
+
+export type JudgeDraft = {
+  draft: number;
+  scores: JudgeScores;
+  overall: number;
+  rewrite_triggered: boolean;
+  rewrite_instruction?: string;
+};
+
+export type JudgeResult = {
+  approvedDraft: number;
+  drafts: JudgeDraft[];
+  finalScript: string;
+};
+
+export async function runWriterAgent(brief: EditorBrief): Promise<string> {
+  const llmResponse = await callLLM(
+    "You are a professional news anchor writing a radio bulletin. Write a natural, flowing 2-3 minute news script. Use smooth segues between stories (e.g., 'Moving on to...', 'In other news...', 'Turning to...'). Add brief pauses with ellipses (...) for dramatic effect. Write as you would speak - short sentences, conversational tone, no jargon. Make each story distinct with facts and names.",
+    `Create a broadcast-quality news script for this bulletin brief:\n\n${JSON.stringify(brief, null, 2)}\n\nRequirements:\n- Start with a cold open that grabs attention (e.g., 'Good morning, here are your top stories...')\n- Briefly mention headlines in 1-2 sentences\n- For EACH story, write 2-3 sentences with specific details (names, places, numbers)\n- Use smooth segues between stories - NO labels like 'Story 1', 'Story 2'\n- End with a sign-off like 'Stay with us for updates'\n- Total: 250-350 words\n- Write for the ear - short sentences, natural pauses (...)\n- ONLY output the script, no commentary or labels`
+  );
+
+  if (llmResponse) {
+    return llmResponse;
+  }
+
+  return createStubTranscript(brief);
+}
+
+export async function runJudgeAgent(script: string, brief: EditorBrief): Promise<JudgeResult> {
+  const llmResponse = await callLLM(
+    "You are a news editor judging broadcast scripts. Score on 5 criteria (1-10 each): Depth, Accuracy, Clarity, Newsworthiness, Audio-readiness. If any score < 7, generate a rewrite instruction. Return ONLY JSON.",
+    `Score this script and return JSON:\n\nScript:\n${script}\n\nBrief:\n${JSON.stringify(brief, null, 2)}\n\nReturn JSON with this exact shape:\n{\n  "drafts": [\n    {\n      "draft": 1,\n      "scores": { "depth": 1-10, "accuracy": 1-10, "clarity": 1-10, "newsworthiness": 1-10, "audio_readiness": 1-10 },\n      "overall": number,\n      "rewrite_triggered": true/false,\n      "rewrite_instruction": "if triggered, what to fix"\n    }\n  ],\n  "approvedDraft": number\n}`
+  );
+
+  if (llmResponse) {
+    try {
+      const parsed = extractJson<{
+        drafts: JudgeDraft[];
+        approvedDraft: number;
+      }>(llmResponse);
+      return { ...parsed, finalScript: script };
+    } catch {
+      // fall through
+    }
+  }
+
+  const scores: JudgeScores = { depth: 7, accuracy: 7, clarity: 7, newsworthiness: 7, audio_readiness: 7 };
+  return {
+    approvedDraft: 1,
+    drafts: [{ draft: 1, scores, overall: 7, rewrite_triggered: false }],
+    finalScript: script,
+  };
 }

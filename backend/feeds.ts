@@ -8,14 +8,19 @@ const parser = new Parser();
 
 export const DEFAULT_FEEDS: FeedSource[] = [
   {
-    name: "BBC World",
-    url: "https://feeds.bbci.co.uk/news/world/rss.xml",
+    name: "NDTV India",
+    url: "https://feeds.ndtv.com/news/india.rss",
     credibility: 9,
   },
   {
-    name: "Al Jazeera",
-    url: "https://www.aljazeera.com/xml/rss/all.xml",
+    name: "Times of India",
+    url: "https://timesofindia.indiatimes.com/rssfeed.cms",
     credibility: 8,
+  },
+  {
+    name: "The Hindu",
+    url: "https://www.thehindu.com/news/feeder/default.rss",
+    credibility: 9,
   },
 ];
 
