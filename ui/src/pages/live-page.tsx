@@ -12,6 +12,7 @@ export function LivePage() {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [error, setError] = useState<string | null>(null)
+  const [audioContextReady, setAudioContextReady] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   // Update clock
@@ -40,9 +41,12 @@ export function LivePage() {
   const generateBroadcast = useCallback(async () => {
     setIsGenerating(true)
     setError(null)
+    setAudioContextReady(false)
     
     try {
       const response = await generateLiveBulletin({ task: 'Live news bulletin with images' })
+      console.log('Broadcast generated:', response.runId)
+      console.log('Audio URL length:', response.audioUrl?.length || 0)
       setBroadcast(response)
       setCurrentStoryIndex(0)
     } catch (err) {
@@ -51,6 +55,32 @@ export function LivePage() {
     } finally {
       setIsGenerating(false)
       setIsLoading(false)
+    }
+  }, [])
+
+  const startPlayback = useCallback(async () => {
+    if (!audioRef.current) return
+    
+    // Resume AudioContext after user gesture
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext
+      if (AudioContext) {
+        const ctx = new AudioContext()
+        if (ctx.state === 'suspended') {
+          await ctx.resume()
+        }
+      }
+    } catch (e) {
+      console.log('AudioContext not supported or already running')
+    }
+    
+    setAudioContextReady(true)
+    
+    // Play audio
+    try {
+      await audioRef.current.play()
+    } catch (e) {
+      console.error('Play failed:', e)
     }
   }, [])
 
@@ -104,7 +134,7 @@ export function LivePage() {
         {/* Left: Anchor */}
         <div className="anchor-section">
           <NewsAnchorAvatar 
-            audioElement={audioRef.current}
+            audioElement={audioContextReady ? audioRef.current : null}
             isPlaying={isPlayingAudio}
             title="Live Anchor"
             key={broadcast?.runId || 'no-broadcast'}
@@ -149,38 +179,48 @@ export function LivePage() {
       {/* Audio Player - Full Width */}
       {broadcast && (
         <div className="live-audio-section">
-          <audio 
-            ref={audioRef}
-            controls
-            autoPlay
-            playsInline
-            crossOrigin="anonymous"
-            className="live-audio-player"
-            src={broadcast.audioUrl}
-            onPlay={() => {
-              console.log('Audio playing')
-              setIsPlayingAudio(true)
-            }}
-            onPause={() => {
-              console.log('Audio paused')
-              setIsPlayingAudio(false)
-            }}
-            onEnded={() => {
-              console.log('Audio ended')
-              setIsPlayingAudio(false)
-            }}
-            onError={(e) => {
-              console.error('Audio error:', e)
-            }}
-          >
-            Your browser does not support audio.
-          </audio>
-          <button onClick={generateBroadcast} className="regenerate-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            New Broadcast
-          </button>
+          {!audioContextReady ? (
+            <button onClick={startPlayback} className="start-broadcast-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              Click to Start Broadcast
+            </button>
+          ) : (
+            <>
+              <audio 
+                ref={audioRef}
+                controls
+                playsInline
+                className="live-audio-player"
+                src={broadcast.audioUrl}
+                onPlay={() => {
+                  console.log('Audio playing')
+                  setIsPlayingAudio(true)
+                }}
+                onPause={() => {
+                  console.log('Audio paused')
+                  setIsPlayingAudio(false)
+                }}
+                onEnded={() => {
+                  console.log('Audio ended')
+                  setIsPlayingAudio(false)
+                }}
+                onError={(e) => {
+                  console.error('Audio error:', e)
+                  console.log('Audio src:', broadcast.audioUrl?.slice(0, 100))
+                }}
+              >
+                Your browser does not support audio.
+              </audio>
+              <button onClick={generateBroadcast} className="regenerate-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                New Broadcast
+              </button>
+            </>
+          )}
         </div>
       )}
 
