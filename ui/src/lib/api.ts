@@ -1,8 +1,8 @@
 import { config } from './config'
 import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, HeadlinesResponse } from './types'
 
-// Only use fixtures in development mode when explicitly enabled
-const USE_FIXTURES = import.meta.env.DEV && !config.apiBaseUrl
+// Use fixtures only if explicitly configured with empty API URL
+const USE_FIXTURES = config.apiBaseUrl === ''
 
 function delay(ms: number) {
   return new Promise((resolve) => {
