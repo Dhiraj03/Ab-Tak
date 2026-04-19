@@ -2,13 +2,7 @@ import OpenAI from "openai";
 
 import type { EditorBrief, RankedStory, StoryCandidate } from "./types";
 
-const OR_API_KEY = process.env.OR_API_KEY;
 const OR_BASE_URL = "https://openrouter.ai/api/v1";
-
-const openai = OR_API_KEY ? new OpenAI({
-  apiKey: OR_API_KEY,
-  baseURL: OR_BASE_URL,
-}) : null;
 
 const SOURCE_CREDIBILITY: Record<string, number> = {
   "BBC World": 9,
@@ -61,35 +55,44 @@ function extractJson<T>(input: string): T {
   return JSON.parse(jsonString) as T;
 }
 
-async function callLLM(system: string, prompt: string): Promise<string | null> {
-  if (!openai) return null;
+function createOpenAIClient(apiKey: string) {
+  return new OpenAI({
+    apiKey,
+    baseURL: OR_BASE_URL,
+  });
+}
+
+async function callLLM(system: string, prompt: string, apiKey: string | undefined): Promise<string | null> {
+  if (!apiKey) {
+    console.log("No API key provided, skipping LLM call");
+    return null;
+  }
+
+  const openai = createOpenAIClient(apiKey);
   
   try {
     const response = await openai.chat.completions.create({
-      model: "moonshotai/kimi-k2-0905",
-      max_tokens: 1200,
-      temperature: 0.7,
+      model: "anthropic/claude-3.5-sonnet",
       messages: [
         { role: "system", content: system },
         { role: "user", content: prompt },
       ],
+      temperature: 0.7,
+      max_tokens: 2000,
     });
-
-    if (!response.choices || response.choices.length === 0) {
-      return null;
-    }
 
     return response.choices[0]?.message?.content ?? null;
   } catch (error) {
-    console.warn("LLM call failed:", error);
+    console.error('LLM call failed:', error);
     return null;
   }
 }
 
-export async function runMonitorAgent(stories: StoryCandidate[]): Promise<RankedStory[]> {
+export async function runMonitorAgent(stories: StoryCandidate[], apiKey: string | undefined): Promise<RankedStory[]> {
   const llmResponse = await callLLM(
     "You are a newsroom monitor. Rank stories by recency, significance, and source credibility. Return only JSON.",
     `Rank these stories and return JSON with this shape:\n{\n  "stories": [\n    {\n      "storyId": "...",\n      "recency": 1-10,\n      "significance": 1-10,\n      "credibility": 1-10,\n      "overall": 1-10,\n      "reasoning": "one sentence"\n    }\n  ]\n}\n\nStories:\n${JSON.stringify(stories, null, 2)}`,
+    apiKey,
   );
 
   if (llmResponse) {
@@ -151,12 +154,13 @@ export async function runMonitorAgent(stories: StoryCandidate[]): Promise<Ranked
     .sort((a, b) => b.scores.overall - a.scores.overall);
 }
 
-export async function runEditorAgent(task: string, rankedStories: RankedStory[]): Promise<EditorBrief> {
+export async function runEditorAgent(task: string, rankedStories: RankedStory[], apiKey: string | undefined): Promise<EditorBrief> {
   const topStories = rankedStories.slice(0, 3);
 
   const llmResponse = await callLLM(
     "You are a senior news editor. Choose the top three stories and create a radio bulletin brief. Return only JSON.",
     `Task: ${task}\n\nReturn JSON with this shape:\n{\n  "task": "string",\n  "coldOpen": "string",\n  "headlinesTease": ["..."],\n  "stories": [\n    {\n      "storyId": "...",\n      "title": "...",\n      "source": "...",\n      "link": "...",\n      "angle": "...",\n      "keyFacts": ["..."],\n      "tone": "..."\n    }\n  ],\n  "signOff": "string"\n}\n\nRanked stories:\n${JSON.stringify(topStories, null, 2)}`,
+    apiKey,
   );
 
   if (llmResponse) {
