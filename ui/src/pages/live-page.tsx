@@ -254,15 +254,13 @@ export function LivePage() {
         </div>
       </main>
 
-      {/* Audio Player - Always render audio, show controls or button */}
+      {/* Hidden Audio - no controls shown for live broadcast */}
       {broadcast && (
-        <div className="live-audio-section">
-          {/* Hidden audio element - always mounted so ref works */}
+        <div className="live-audio-section" style={{ display: 'none' }}>
           <audio 
             ref={audioRef}
             playsInline
             preload="auto"
-            style={{ display: 'none' }}
             src={broadcast.audioUrl}
             onPlay={() => {
               console.log('Audio playing')
@@ -280,32 +278,6 @@ export function LivePage() {
               console.error('Audio error:', e)
             }}
           />
-          
-          {!audioContextReady ? (
-            <button onClick={startPlayback} className="start-broadcast-btn">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-              Click to Start Broadcast
-            </button>
-          ) : (
-            <>
-              <audio 
-                controls
-                playsInline
-                className="live-audio-player"
-                src={broadcast.audioUrl}
-              >
-                Your browser does not support audio.
-              </audio>
-              <button onClick={generateBroadcast} className="regenerate-btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                New Broadcast
-              </button>
-            </>
-          )}
         </div>
       )}
 
