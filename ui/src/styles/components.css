@@ -3103,7 +3103,7 @@
 }
 
 .anchor-section .anchor-card {
-  transform: scale(1);
+  transform: scale(1.1);
   transform-origin: center center;
   max-height: 100%;
   max-width: 100%;

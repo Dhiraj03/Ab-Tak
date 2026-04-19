@@ -1,5 +1,5 @@
 import { runEditorAgent, runMonitorAgent, runWriterAgent, runJudgeAgent, type JudgeResult } from "./agents";
-import { fetchStoriesWithImages } from "./feeds";
+import { fetchStoriesWithImages, DEFAULT_FEEDS } from "./feeds";
 import { generateAudio } from "./tts";
 import type { AgentTrace, LiveStory, JudgeSummary } from "./types";
 
@@ -41,15 +41,18 @@ export async function runLivePipeline(
   
   const pipelineStart = performance.now();
 
-  // Step 1: Fetch stories with images
+  // Step 1: Fetch stories with images - get more to ensure we have enough with images
   const fetchStart = performance.now();
-  const stories = await fetchStoriesWithImages();
+  const allStories = await fetchStoriesWithImages(DEFAULT_FEEDS, 5); // Fetch 5 per feed
+  
+  // Filter to only stories with images before ranking
+  const stories = allStories.filter(s => s.imageUrl !== null);
   const fetchDuration = Math.round(performance.now() - fetchStart);
   
   agents.push({
     name: "Feed Monitor",
     input: `Fetching live news with images`,
-    output_summary: `Retrieved ${stories.length} stories with ${stories.filter(s => s.imageUrl).length} images`,
+    output_summary: `Retrieved ${allStories.length} stories, filtered to ${stories.length} with images`,
     duration_ms: fetchDuration,
     cost_usd: 0,
     tokens: 0,
@@ -175,18 +178,20 @@ export async function runLivePipeline(
   // Calculate total
   totalDurationMs = Math.round(performance.now() - pipelineStart);
 
-  // Map to LiveStory format with images
-  const liveStories: LiveStory[] = brief.stories.map((story: any) => {
-    const fullStory = stories.find(s => s.title === story.title);
-    return {
-      title: story.title,
-      url: story.link,
-      source: story.source,
-      imageUrl: fullStory?.imageUrl || null,
-      summary: story.keyFacts?.[0] || story.angle || "",
-      publishedAt: new Date().toISOString(),
-    };
-  });
+  // Map to LiveStory format with images - only include stories with images
+  const liveStories: LiveStory[] = brief.stories
+    .map((story: any) => {
+      const fullStory = stories.find(s => s.title === story.title);
+      return {
+        title: story.title,
+        url: story.link,
+        source: story.source,
+        imageUrl: fullStory?.imageUrl || null,
+        summary: story.keyFacts?.[0] || story.angle || "",
+        publishedAt: new Date().toISOString(),
+      };
+    })
+    .filter((story: LiveStory) => story.imageUrl !== null);
 
   return {
     task,

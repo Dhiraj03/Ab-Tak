@@ -26,27 +26,55 @@ export function LivePage() {
     generateBroadcast()
   }, [])
 
-  // Auto-start audio when broadcast is ready (after user interaction)
+  // Auto-start audio when broadcast is ready
   useEffect(() => {
-    if (!broadcast?.audioUrl || isPlayingAudio) return
+    if (!broadcast?.audioUrl || isPlayingAudio || audioContextReady) return
     
-    // Try to auto-play once broadcast is loaded
-    const autoPlayTimer = setTimeout(() => {
+    // Try to auto-play immediately when broadcast loads
+    const attemptPlay = () => {
       if (audioRef.current && broadcast.audioUrl) {
         audioRef.current.src = broadcast.audioUrl
+        audioRef.current.volume = 1.0
+        
+        const playPromise = audioRef.current.play()
+        
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log('Auto-play started successfully')
+            setIsPlayingAudio(true)
+            setAudioContextReady(true)
+          }).catch((err) => {
+            console.log('Auto-play blocked by browser policy:', err)
+            // Keep trying every 500ms until user interacts
+            setTimeout(attemptPlay, 500)
+          })
+        }
+      }
+    }
+    
+    // Start immediately
+    attemptPlay()
+    
+    // Also try on any user interaction
+    const handleInteraction = () => {
+      if (!isPlayingAudio && audioRef.current) {
         audioRef.current.play().then(() => {
-          console.log('Auto-play started')
           setIsPlayingAudio(true)
           setAudioContextReady(true)
-        }).catch((err) => {
-          console.log('Auto-play blocked, waiting for user interaction:', err)
-          // Browser blocked autoplay - show the button
-        })
+        }).catch(() => {})
       }
-    }, 500)
+    }
     
-    return () => clearTimeout(autoPlayTimer)
-  }, [broadcast])
+    document.addEventListener('click', handleInteraction, { once: true })
+    document.addEventListener('touchstart', handleInteraction, { once: true })
+    document.addEventListener('keydown', handleInteraction, { once: true })
+    
+    return () => {
+      document.removeEventListener('click', handleInteraction)
+      document.removeEventListener('touchstart', handleInteraction)
+      document.removeEventListener('keydown', handleInteraction)
+    }
+  }, [broadcast, isPlayingAudio, audioContextReady])
 
   // Rotate stories based on audio time
   useEffect(() => {
@@ -224,9 +252,33 @@ export function LivePage() {
         </div>
       </main>
 
-      {/* Audio Player - Full Width */}
+      {/* Audio Player - Always render audio, show controls or button */}
       {broadcast && (
         <div className="live-audio-section">
+          {/* Hidden audio element - always mounted so ref works */}
+          <audio 
+            ref={audioRef}
+            playsInline
+            preload="auto"
+            style={{ display: 'none' }}
+            src={broadcast.audioUrl}
+            onPlay={() => {
+              console.log('Audio playing')
+              setIsPlayingAudio(true)
+            }}
+            onPause={() => {
+              console.log('Audio paused')
+              setIsPlayingAudio(false)
+            }}
+            onEnded={() => {
+              console.log('Audio ended')
+              setIsPlayingAudio(false)
+            }}
+            onError={(e) => {
+              console.error('Audio error:', e)
+            }}
+          />
+          
           {!audioContextReady ? (
             <button onClick={startPlayback} className="start-broadcast-btn">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -237,27 +289,10 @@ export function LivePage() {
           ) : (
             <>
               <audio 
-                ref={audioRef}
                 controls
                 playsInline
                 className="live-audio-player"
                 src={broadcast.audioUrl}
-                onPlay={() => {
-                  console.log('Audio playing')
-                  setIsPlayingAudio(true)
-                }}
-                onPause={() => {
-                  console.log('Audio paused')
-                  setIsPlayingAudio(false)
-                }}
-                onEnded={() => {
-                  console.log('Audio ended')
-                  setIsPlayingAudio(false)
-                }}
-                onError={(e) => {
-                  console.error('Audio error:', e)
-                  console.log('Audio src:', broadcast.audioUrl?.slice(0, 100))
-                }}
               >
                 Your browser does not support audio.
               </audio>

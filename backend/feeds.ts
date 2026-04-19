@@ -4,7 +4,18 @@ import Parser from "rss-parser";
 
 import type { FeedSource, StoryCandidate } from "./types";
 
-const parser = new Parser();
+// Configure parser to extract media content and other fields
+const parser = new Parser({
+  customFields: {
+    item: [
+      ['media:content', 'media:content'],
+      ['media:thumbnail', 'media:thumbnail'],
+      'enclosure',
+      'content:encoded',
+      'content',
+    ],
+  },
+});
 
 export const DEFAULT_FEEDS: FeedSource[] = [
   { name: "NDTV India", url: "https://feeds.ndtv.com/news/india.rss", credibility: 9 },
@@ -200,44 +211,66 @@ function resolveUrl(src: string, baseUrl: string): string {
 
 // Extract image from RSS item (media:content, enclosure, or content)
 function extractRssImage(item: any): string | null {
-  // Debug: log available fields
-  console.log('RSS item fields:', Object.keys(item).join(', '));
-  
-  // Try media:content (common in many RSS feeds)
+  // Try media:content - The Hindu format: media:content: { $: { url: '...' } }
   if (item['media:content']) {
     const mc = item['media:content'];
-    if (mc.$?.url) return mc.$.url;
-    if (mc.url) return mc.url;
-    if (Array.isArray(mc) && mc[0]) {
-      return mc[0].$?.url || mc[0].url || null;
+    // Handle object with $ property
+    if (mc && typeof mc === 'object') {
+      if (mc.$ && mc.$.url) {
+        return mc.$.url;
+      }
+      // Handle array of media content
+      if (Array.isArray(mc) && mc.length > 0) {
+        const first = mc[0];
+        if (first.$ && first.$.url) {
+          return first.$.url;
+        }
+      }
     }
   }
   
   // Try media:thumbnail
   if (item['media:thumbnail']) {
     const mt = item['media:thumbnail'];
-    if (mt.$?.url) return mt.$.url;
-    if (mt.url) return mt.url;
+    if (mt && typeof mt === 'object' && mt.$ && mt.$.url) {
+      return mt.$.url;
+    }
+    if (typeof mt === 'string') {
+      return mt;
+    }
   }
   
   // Try enclosure
   if (item.enclosure?.url) {
     return item.enclosure.url;
   }
+  if (item.enclosure?.$.url) {
+    return item.enclosure.$.url;
+  }
   
   // Try content encoded with img tag
   if (item['content:encoded']) {
-    const imgMatch = item['content:encoded'].match(/<img[^>]+src=["']([^"']+)["']/i);
-    if (imgMatch) {
-      return imgMatch[1];
+    const content = typeof item['content:encoded'] === 'string' 
+      ? item['content:encoded'] 
+      : item['content:encoded']._ || item['content:encoded'].$?.url;
+    if (typeof content === 'string') {
+      const imgMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch) {
+        return imgMatch[1];
+      }
     }
   }
   
   // Try content with img tag
-  if (item.content && typeof item.content === 'string') {
-    const imgMatch = item.content.match(/<img[^>]+src=["']([^"']+)["']/i);
-    if (imgMatch) {
-      return imgMatch[1];
+  if (item.content) {
+    const content = typeof item.content === 'string' 
+      ? item.content 
+      : item.content._ || item.content.$?.url;
+    if (typeof content === 'string') {
+      const imgMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch) {
+        return imgMatch[1];
+      }
     }
   }
   
