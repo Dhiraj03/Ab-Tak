@@ -32,6 +32,8 @@ export async function runEvalTask(
       cost_usd: result.totalCostUsd,
       transcript_length: result.transcript.length,
       sources_count: result.sources.length,
+      transcript_snippet: result.transcript.slice(0, 500), // Proof of work
+      sources_list: result.sources.slice(0, 3).map(s => ({ title: s.title, url: s.url, source: s.source })),
       errors: errors.length > 0 ? errors : undefined,
     };
   } catch (error) {
@@ -50,6 +52,8 @@ export async function runEvalTask(
       cost_usd: 0,
       transcript_length: 0,
       sources_count: 0,
+      transcript_snippet: '',
+      sources_list: [],
       errors,
     };
   }
@@ -67,7 +71,7 @@ export async function runFullEvalSet(
   const tasks = STANDARD_EVAL_SET.tasks;
   const totalTasks = tasks.length;
 
-  // Run each eval task sequentially
+  // Run each eval task sequentially (no delay for quick eval)
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i];
     onProgress?.(i, totalTasks, task.task);
@@ -76,11 +80,6 @@ export async function runFullEvalSet(
     results.push(result);
     
     onProgress?.(i + 1, totalTasks, task.task);
-    
-    // Small delay between evals to avoid rate limiting
-    if (i < tasks.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
   }
 
   const totalDurationMs = Math.round(performance.now() - startTime);

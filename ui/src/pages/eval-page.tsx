@@ -285,7 +285,7 @@ export function EvalPage() {
                   </div>
                 </div>
 
-                <h4>Task Results</h4>
+                <h4>Task Results with Proof</h4>
                 <div className="task-results">
                   {selectedEvalRun.results.map((result, idx) => (
                     <div key={result.task_id} className={`task-result ${result.passed ? 'pass' : 'fail'}`}>
@@ -304,6 +304,30 @@ export function EvalPage() {
                         <span>Audio: {result.judge_scores.audio_readiness}</span>
                         <strong>Overall: {result.overall_score.toFixed(1)}</strong>
                       </div>
+                      {/* Proof Section */}
+                      {result.transcript_snippet && (
+                        <div className="task-proof">
+                          <details>
+                            <summary>📄 View Transcript Proof ({result.transcript_length} chars)</summary>
+                            <pre className="transcript-proof">{result.transcript_snippet}...</pre>
+                          </details>
+                          {result.sources_list && result.sources_list.length > 0 && (
+                            <details>
+                              <summary>🔗 Sources ({result.sources_list.length})</summary>
+                              <ul className="sources-proof">
+                                {result.sources_list.map((source, sidx) => (
+                                  <li key={sidx}>
+                                    <a href={source.url} target="_blank" rel="noopener noreferrer">
+                                      {source.title.slice(0, 60)}...
+                                    </a>
+                                    <span className="source-tag">{source.source}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

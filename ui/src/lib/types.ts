@@ -126,6 +126,8 @@ export interface EvalResult {
   cost_usd: number
   transcript_length: number
   sources_count: number
+  transcript_snippet: string
+  sources_list: { title: string; url: string; source: string }[]
   errors?: string[]
 }
 

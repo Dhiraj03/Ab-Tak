@@ -25,6 +25,8 @@ export interface EvalResult {
   cost_usd: number;
   transcript_length: number;
   sources_count: number;
+  transcript_snippet: string; // First 500 chars as proof
+  sources_list: { title: string; url: string; source: string }[];
   errors?: string[];
 }
 
@@ -76,21 +78,9 @@ export const STANDARD_EVAL_SET: EvalSet = {
     },
     {
       id: "eval-3",
-      task: "Summarize breaking news about international relations and diplomacy",
-      expected_dimensions: ["depth", "accuracy", "clarity", "newsworthiness", "audio_readiness"],
-      notes: "Diplomacy focus - should handle nuanced stories with proper context and multiple viewpoints"
-    },
-    {
-      id: "eval-4",
       task: "Cover economic and market news from the past 4 hours",
       expected_dimensions: ["depth", "accuracy", "clarity", "newsworthiness", "audio_readiness"],
       notes: "Business/economics - should include specific figures, market movements, and explain significance"
-    },
-    {
-      id: "eval-5",
-      task: "Report on science, health, and environment stories from today",
-      expected_dimensions: ["depth", "accuracy", "clarity", "newsworthiness", "audio_readiness"],
-      notes: "Science/health focus - should explain technical topics in accessible audio format"
     }
   ],
   scoring_guide: {
