@@ -1,6 +1,6 @@
 import { config } from './config'
 import { fixtureGenerateResponse, fixtureQaResponse, fixtureRunRecord } from './fixtures'
-import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord } from './types'
+import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, HeadlinesResponse } from './types'
 
 const USE_FIXTURES = !config.apiBaseUrl
 
@@ -67,4 +67,22 @@ export async function getRunById(runId: string): Promise<RunRecord | null> {
   }
 
   return apiFetch<RunRecord>(`/api/runs/${runId}`)
+}
+
+export async function fetchHeadlines(): Promise<HeadlinesResponse> {
+  if (USE_FIXTURES) {
+    await delay(500)
+    return {
+      headlines: [
+        { id: '1', title: 'Global markets respond to new trade policy announcements', source: 'BBC World', url: '#', publishedAt: new Date().toISOString(), priority: 'high' },
+        { id: '2', title: 'Climate summit concludes with new agreements on emissions', source: 'Al Jazeera', url: '#', publishedAt: new Date().toISOString(), priority: 'high' },
+        { id: '3', title: 'Tech industry announces major advancements in AI', source: 'BBC World', url: '#', publishedAt: new Date().toISOString(), priority: 'medium' },
+        { id: '4', title: 'International health organization reports on disease prevention progress', source: 'Al Jazeera', url: '#', publishedAt: new Date().toISOString(), priority: 'medium' },
+        { id: '5', title: 'Diplomatic talks resume in major conflict zone', source: 'BBC World', url: '#', publishedAt: new Date().toISOString(), priority: 'high' },
+      ],
+      count: 5
+    }
+  }
+
+  return apiFetch<HeadlinesResponse>('/api/headlines')
 }

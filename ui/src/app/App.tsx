@@ -13,6 +13,7 @@ export function App() {
             <NavLink to="/" end>
               Bulletin
             </NavLink>
+            <NavLink to="/live">Live</NavLink>
             <NavLink to="/observability">Observability</NavLink>
           </nav>
         </div>

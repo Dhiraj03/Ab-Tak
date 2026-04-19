@@ -120,3 +120,13 @@ export interface RunRecord {
   total_duration_ms: number;
   total_cost_usd: number;
 }
+
+// Headlines for live feed
+export interface Headline {
+  id: string;
+  title: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+  priority: 'high' | 'medium' | 'low';
+}

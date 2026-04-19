@@ -49,6 +49,21 @@ export interface QaResponse {
   durationMs: number
 }
 
+// Headlines for live feed
+export interface Headline {
+  id: string
+  title: string
+  source: string
+  url: string
+  publishedAt: string
+  priority: 'high' | 'medium' | 'low'
+}
+
+export interface HeadlinesResponse {
+  headlines: Headline[]
+  count: number
+}
+
 export interface JudgeDraft {
   draft: number
   scores: JudgeScores

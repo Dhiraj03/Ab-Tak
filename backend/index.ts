@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { runHourOnePipeline } from './pipeline';
-import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord } from './types';
+import { fetchFeeds } from './feeds';
+import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, Headline } from './types';
 
 // In-memory store for runs (replace with Durable Objects or D1 for production)
 const runs = new Map<string, RunRecord>();
@@ -117,6 +118,23 @@ export default {
         }
 
         return new Response(JSON.stringify(run), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // GET /api/headlines - Get rotating headlines
+      if (path === '/api/headlines' && method === 'GET') {
+        const stories = await fetchFeeds();
+        const headlines: Headline[] = stories.slice(0, 15).map((story, index) => ({
+          id: story.id,
+          title: story.title,
+          source: story.source,
+          url: story.link,
+          publishedAt: story.publishedAt,
+          priority: index < 5 ? 'high' : index < 10 ? 'medium' : 'low',
+        }));
+        
+        return new Response(JSON.stringify({ headlines, count: headlines.length }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
