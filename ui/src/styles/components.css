@@ -3131,14 +3131,25 @@
   padding: var(--space-4);
 }
 
-/* Anchor positioning */
+/* Anchor positioning - centered */
 .anchor-position.clean {
   width: 100%;
-  max-width: 800px;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.anchor-position.clean .anchor-card {
+  width: auto;
+  max-width: 500px;
+  transform: scale(1.4);
+  transform-origin: center center;
+}
+
+.anchor-position.clean .anchor-svg {
+  width: 320px;
+  height: 384px;
 }
 
 /* Clean bottom ticker */
