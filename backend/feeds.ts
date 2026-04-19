@@ -200,12 +200,24 @@ function resolveUrl(src: string, baseUrl: string): string {
 
 // Extract image from RSS item (media:content, enclosure, or content)
 function extractRssImage(item: any): string | null {
-  // Try media:content
-  if (item['media:content']?.$?.url) {
-    return item['media:content'].$.url;
+  // Debug: log available fields
+  console.log('RSS item fields:', Object.keys(item).join(', '));
+  
+  // Try media:content (common in many RSS feeds)
+  if (item['media:content']) {
+    const mc = item['media:content'];
+    if (mc.$?.url) return mc.$.url;
+    if (mc.url) return mc.url;
+    if (Array.isArray(mc) && mc[0]) {
+      return mc[0].$?.url || mc[0].url || null;
+    }
   }
-  if (Array.isArray(item['media:content']) && item['media:content'][0]?.$?.url) {
-    return item['media:content'][0].$.url;
+  
+  // Try media:thumbnail
+  if (item['media:thumbnail']) {
+    const mt = item['media:thumbnail'];
+    if (mt.$?.url) return mt.$.url;
+    if (mt.url) return mt.url;
   }
   
   // Try enclosure
@@ -222,7 +234,7 @@ function extractRssImage(item: any): string | null {
   }
   
   // Try content with img tag
-  if (item.content) {
+  if (item.content && typeof item.content === 'string') {
     const imgMatch = item.content.match(/<img[^>]+src=["']([^"']+)["']/i);
     if (imgMatch) {
       return imgMatch[1];
