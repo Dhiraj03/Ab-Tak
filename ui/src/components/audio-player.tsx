@@ -1,17 +1,40 @@
+import { useEffect, useRef } from 'react'
+
 interface AudioPlayerProps {
   audioUrl: string
 }
 
 export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
-  return (
-    <section className="panel result-panel">
-      <div className="section-heading">
-        <h3>Bulletin Audio</h3>
-        <span className="badge">Ready to play</span>
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  useEffect(() => {
+    if (audioUrl && audioRef.current) {
+      audioRef.current.play().catch(err => {
+        console.log('Auto-play prevented by browser:', err)
+      })
+    }
+  }, [audioUrl])
+
+  if (!audioUrl) {
+    return (
+      <div className="audio-player-empty">
+        <p className="muted">No audio available</p>
       </div>
-      <audio className="audio-player" controls preload="none" src={audioUrl}>
+    )
+  }
+
+  return (
+    <div className="audio-player-wrapper">
+      <audio 
+        ref={audioRef}
+        className="audio-player-full" 
+        controls 
+        preload="auto" 
+        src={audioUrl}
+        autoPlay
+      >
         Your browser does not support audio playback.
       </audio>
-    </section>
+    </div>
   )
 }

@@ -136,10 +136,10 @@ export function HomePage() {
         </section>
       )}
 
-      {/* Main Player - Only show when bulletin exists */}
+      {/* Full Width Audio Player - Only show when bulletin exists */}
       {hasBulletin && !isGenerating && (
-        <section className="main-player" ref={audioRef}>
-          <div className="player-header">
+        <section className="fullwidth-player" ref={audioRef}>
+          <div className="player-header-row">
             <div className="now-playing">
               <span className="live-badge">ON AIR</span>
               <span className="bulletin-time">
@@ -149,11 +149,9 @@ export function HomePage() {
             <h2 className="bulletin-title">{bulletin.transcript.slice(0, 80)}...</h2>
           </div>
 
-          <div className="player-container">
-            <AudioPlayer audioUrl={bulletin.audioUrl} />
-          </div>
+          <AudioPlayer audioUrl={bulletin.audioUrl} />
 
-          <div className="player-meta">
+          <div className="player-meta-row">
             <span className="meta-item">
               <strong>Duration:</strong> ~2:30
             </span>
@@ -162,6 +160,9 @@ export function HomePage() {
             </span>
             <span className="meta-item">
               <strong>Quality Score:</strong> {Math.round((bulletin.judge.scores.depth + bulletin.judge.scores.accuracy + bulletin.judge.scores.clarity + bulletin.judge.scores.newsworthiness + bulletin.judge.scores.audio_readiness) / 5)}/10
+            </span>
+            <span className="meta-item">
+              <strong>Generated in:</strong> {(genTimeMs / 1000).toFixed(1)}s
             </span>
           </div>
         </section>
