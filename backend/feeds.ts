@@ -129,6 +129,133 @@ export async function extractArticleText(url: string) {
   };
 }
 
+// Extract main image from article URL
+export async function extractArticleImage(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      },
+      redirect: "follow",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+    const dom = new JSDOM(html, { url });
+    const doc = dom.window.document;
+
+    // Try multiple image sources in order of priority
+    // 1. Open Graph image
+    const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute("content");
+    if (ogImage) {
+      return resolveUrl(ogImage, url);
+    }
+
+    // 2. Twitter card image
+    const twitterImage = doc.querySelector('meta[name="twitter:image"]')?.getAttribute("content");
+    if (twitterImage) {
+      return resolveUrl(twitterImage, url);
+    }
+
+    // 3. Article with image
+    const articleImg = doc.querySelector('article img, .article img, .story img, [class*="content"] img')?.getAttribute("src");
+    if (articleImg) {
+      return resolveUrl(articleImg, url);
+    }
+
+    // 4. First large image on page
+    const images = Array.from(doc.querySelectorAll('img'));
+    const largeImage = images.find(img => {
+      const width = parseInt(img.getAttribute("width") || "0");
+      const height = parseInt(img.getAttribute("height") || "0");
+      return width > 300 || height > 200;
+    });
+    
+    if (largeImage) {
+      return resolveUrl(largeImage.getAttribute("src") || "", url);
+    }
+
+    return null;
+  } catch (error) {
+    console.warn("Failed to extract image from", url, error);
+    return null;
+  }
+}
+
+// Resolve relative URLs to absolute
+function resolveUrl(src: string, baseUrl: string): string {
+  if (!src) return "";
+  if (src.startsWith("http")) return src;
+  if (src.startsWith("//")) return `https:${src}`;
+  if (src.startsWith("/")) {
+    const base = new URL(baseUrl);
+    return `${base.protocol}//${base.host}${src}`;
+  }
+  return new URL(src, baseUrl).href;
+}
+
+// Fetch stories with images and summaries
+export async function fetchStoriesWithImages(
+  feeds: FeedSource[] = DEFAULT_FEEDS,
+  perFeedLimit = 3
+): Promise<Array<{
+  id: string;
+  title: string;
+  link: string;
+  source: string;
+  publishedAt: string;
+  summary: string;
+  imageUrl: string | null;
+}>> {
+  try {
+    const allItems = await Promise.allSettled(
+      feeds.map(async (feed) => {
+        const parsed = await parser.parseURL(feed.url);
+
+        return (parsed.items ?? []).slice(0, perFeedLimit).map((item, index) => ({
+          id: makeStoryId(item.link ?? `${feed.name}-${index}`, index),
+          title: normalizeText(item.title),
+          link: item.link ?? "",
+          source: feed.name,
+          publishedAt: item.isoDate ?? item.pubDate ?? new Date().toISOString(),
+          summary: normalizeText(item.contentSnippet ?? item.content ?? item.summary).slice(0, 200),
+          imageUrl: null as string | null,
+        }));
+      }),
+    );
+
+    let stories = allItems
+      .filter((result): result is PromiseFulfilledResult<any[]> => result.status === "fulfilled")
+      .flatMap((result) => result.value);
+
+    if (stories.length === 0) {
+      console.warn("All feeds failed, using mock data");
+      return MOCK_STORIES.map(s => ({ ...s, imageUrl: null }));
+    }
+
+    // Fetch images for each story
+    const storiesWithImages = await Promise.all(
+      stories.slice(0, 6).map(async (story) => {
+        try {
+          const imageUrl = await extractArticleImage(story.link);
+          return { ...story, imageUrl };
+        } catch {
+          return story;
+        }
+      })
+    );
+
+    return storiesWithImages;
+  } catch (error) {
+    console.warn("Feed fetch error:", error);
+    return MOCK_STORIES.map(s => ({ ...s, imageUrl: null }));
+  }
+}
+
 export async function hydrateStories(stories: StoryCandidate[], limit = 5) {
   const hydrated = await Promise.all(
     stories.map(async (story, index) => {

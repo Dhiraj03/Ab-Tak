@@ -3,7 +3,8 @@ import { runFullPipeline, createPipelinePlan, type PipelinePlan, recordEpisodicM
 import { fetchFeeds } from './feeds';
 import { runQaAgent } from './agents';
 import { runFullEvalSet, generateEvalReport } from './eval-runner';
-import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, Headline, EditorBrief } from './types';
+import { runLivePipeline } from './live-pipeline';
+import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, Headline, EditorBrief, GenerateLiveRequest, GenerateLiveResponse } from './types';
 import type { EvalRun } from './eval-types';
 
 const runs = new Map<string, RunRecord>();
@@ -76,6 +77,47 @@ export default {
           transcript: result.transcript,
           sources: result.sources,
           audio_url: audioUrl,
+          judge: result.judge,
+          qa_events: [],
+          total_duration_ms: result.totalDurationMs,
+          total_cost_usd: result.totalCostUsd,
+        };
+        runs.set(runId, runRecord);
+
+        return new Response(JSON.stringify(response), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Live broadcast endpoint with images
+      if (path === '/api/generate_live' && method === 'POST') {
+        const body = await request.json() as GenerateLiveRequest;
+        const runId = uuidv4();
+        
+        const result = await runLivePipeline(body.task, env.OR_API_KEY, env.ELEVENLABS_API_KEY);
+        
+        lastRunBrief = result.brief;
+        lastRunTranscript = result.transcript;
+
+        const response: GenerateLiveResponse = {
+          runId,
+          status: 'completed',
+          audioUrl: result.audioUrl || result.audioBase64,
+          transcript: result.transcript,
+          stories: result.stories,
+          judge: result.judge,
+          currentStoryIndex: 0,
+        };
+
+        const runRecord: RunRecord = {
+          run_id: runId,
+          timestamp: new Date().toISOString(),
+          task: body.task,
+          status: 'completed',
+          agents: result.agents,
+          transcript: result.transcript,
+          sources: result.stories.map(s => ({ title: s.title, url: s.url, source: s.source })),
+          audio_url: result.audioUrl || result.audioBase64,
           judge: result.judge,
           qa_events: [],
           total_duration_ms: result.totalDurationMs,

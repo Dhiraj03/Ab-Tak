@@ -143,3 +143,27 @@ export type SourceLink = {
   url: string;
   source?: string;
 };
+
+// Live broadcast with images
+export interface LiveStory {
+  title: string;
+  url: string;
+  source: string;
+  imageUrl: string | null;
+  summary: string;
+  publishedAt: string;
+}
+
+export interface GenerateLiveRequest {
+  task: string;
+}
+
+export interface GenerateLiveResponse {
+  runId: string;
+  status: string;
+  audioUrl: string;
+  transcript: string;
+  stories: LiveStory[];
+  judge: JudgeSummary;
+  currentStoryIndex?: number;
+}

@@ -1,5 +1,5 @@
 import { config } from './config'
-import type { GenerateRequest, GenerateResponse, QaRequest, QaResponse, RunRecord, HeadlinesResponse, EvalRun, EvalSet } from './types'
+import type { GenerateRequest, GenerateResponse, GenerateLiveResponse, QaRequest, QaResponse, RunRecord, HeadlinesResponse, EvalRun, EvalSet } from './types'
 
 // Only use fixtures in development mode when explicitly enabled
 const USE_FIXTURES = import.meta.env.DEV && !config.apiBaseUrl
@@ -113,6 +113,31 @@ export async function fetchHeadlines(): Promise<HeadlinesResponse> {
   }
 
   return apiFetch<HeadlinesResponse>('/api/headlines')
+}
+
+export async function generateLiveBulletin(request: GenerateRequest): Promise<GenerateLiveResponse> {
+  if (USE_FIXTURES) {
+    await delay(3000)
+    return {
+      runId: 'live-run-' + Date.now(),
+      status: 'completed',
+      audioUrl: '',
+      transcript: 'Good morning. Here is your live Ab Tak news bulletin with images.',
+      stories: [
+        { title: 'Live Story 1', url: '#', source: 'Test', imageUrl: null, summary: 'Test summary', publishedAt: new Date().toISOString() },
+      ],
+      judge: {
+        approvedDraft: 1,
+        scores: { depth: 7, accuracy: 7, clarity: 7, newsworthiness: 7, audio_readiness: 7 },
+      },
+      currentStoryIndex: 0,
+    }
+  }
+
+  return apiFetch<GenerateLiveResponse>('/api/generate_live', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
 }
 
 // Eval API endpoints

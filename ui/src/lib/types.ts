@@ -155,3 +155,23 @@ export interface EvalSet {
     no_single_score_below: number
   }
 }
+
+// Live broadcast with images
+export interface LiveStory {
+  title: string
+  url: string
+  source: string
+  imageUrl: string | null
+  summary: string
+  publishedAt: string
+}
+
+export interface GenerateLiveResponse {
+  runId: string
+  status: string
+  audioUrl: string
+  transcript: string
+  stories: LiveStory[]
+  judge: JudgeSummary
+  currentStoryIndex?: number
+}
