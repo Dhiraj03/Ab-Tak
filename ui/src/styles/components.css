@@ -3352,23 +3352,24 @@
 
 /* Fixed navigation header only */
 .site-header.live-header {
-  position: fixed;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  background: rgba(10, 10, 11, 0.98);
+  z-index: 100;
+  height: var(--header-height);
+  background: linear-gradient(180deg, var(--bg-primary) 0%, rgba(10, 10, 11, 0.95) 100%);
   border-bottom: 1px solid var(--border);
-  height: 50px;
+  backdrop-filter: blur(12px);
 }
 
 .site-header.live-header .site-header-content {
-  max-width: 1400px;
+  max-width: var(--max-width);
   margin: 0 auto;
-  padding: var(--space-2) var(--space-4);
+  padding: 0 var(--space-6);
   height: 100%;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
 }
 
 /* Main stage - takes remaining space */
