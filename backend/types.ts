@@ -119,6 +119,11 @@ export interface RunRecord {
   total_cost_usd: number;
 }
 
+export interface JudgeSummary {
+  approvedDraft: number
+  scores: JudgeScores
+}
+
 // Headlines for live feed
 export interface Headline {
   id: string;
