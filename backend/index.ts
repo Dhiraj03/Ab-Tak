@@ -11,22 +11,12 @@ export interface Env {
 
 // Initialize D1 schema on first use
 async function initDB(db: D1Database): Promise<void> {
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS runs (
-      run_id TEXT PRIMARY KEY,
-      timestamp TEXT NOT NULL,
-      task TEXT NOT NULL,
-      status TEXT NOT NULL,
-      total_duration_ms INTEGER NOT NULL,
-      total_cost_usd REAL NOT NULL,
-      transcript TEXT NOT NULL,
-      audio_url TEXT,
-      sources_json TEXT NOT NULL,
-      judge_json TEXT NOT NULL,
-      agents_json TEXT NOT NULL,
-      qa_events_json TEXT NOT NULL
-    );
-  `);
+  try {
+    await db.exec(`CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, task TEXT NOT NULL, status TEXT NOT NULL, total_duration_ms INTEGER NOT NULL, total_cost_usd REAL NOT NULL, transcript TEXT NOT NULL, audio_url TEXT, sources_json TEXT NOT NULL, judge_json TEXT NOT NULL, agents_json TEXT NOT NULL, qa_events_json TEXT NOT NULL)`);
+  } catch (error) {
+    console.error('DB initialization error:', error);
+    // Continue even if table exists - don't block requests
+  }
 }
 
 export default {
@@ -47,7 +37,14 @@ export default {
     }
 
     try {
-      // Initialize DB
+      // Health check - no DB needed
+      if (path === '/health' && method === 'GET') {
+        return new Response(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Initialize DB for all other routes
       await initDB(env.DB);
 
       // POST /api/generate - Generate a new bulletin
@@ -268,13 +265,6 @@ export default {
         });
       }
 
-      // Health check
-      if (path === '/health' && method === 'GET') {
-        return new Response(JSON.stringify({ status: 'ok' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
       // 404 for unknown routes
       return new Response(JSON.stringify({ error: 'Not found' }), {
         status: 404,
@@ -282,8 +272,9 @@ export default {
       });
 
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('API Error:', error);
-      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      return new Response(JSON.stringify({ error: 'Internal server error', details: errorMessage }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

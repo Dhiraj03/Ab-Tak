@@ -7,7 +7,7 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "ab-tak-runs"
-database_id = "your-database-id-here"
+database_id = "ea939965-9170-4baf-bd5f-a2e5e040d64b"
 
 [vars]
 # Add any public environment variables here
