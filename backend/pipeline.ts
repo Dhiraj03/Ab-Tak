@@ -1,7 +1,9 @@
 import { runEditorAgent, runMonitorAgent, runWriterAgent, runJudgeAgent, type JudgeResult } from "./agents";
 import { fetchFeeds } from "./feeds";
-import { generateAudio } from "./tts";
 import type { AgentTrace, SourceLink, JudgeSummary } from "./types";
+
+const ELEVENLABS_VOICE_ID = "3WqHLnw80rOZqJzW9YRB";
+const ELEVENLABS_MODEL = "eleven_flash_v2_5";
 
 export type PipelineResult = {
   task: string;
@@ -122,13 +124,60 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
   
   let audioResult = null;
   let audioError = null;
+  let apiResponseStatus = null;
   
-  try {
-    audioResult = await generateAudio(judge.finalScript, elevenLabsKey);
-    console.log("Pipeline: audioResult:", audioResult ? "SUCCESS (length:" + audioResult.length + ")" : "NULL");
-  } catch (err) {
-    audioError = err instanceof Error ? err.message : String(err);
-    console.error("Pipeline: generateAudio ERROR:", audioError);
+  if (!elevenLabsKey) {
+    audioError = "No API key provided";
+  } else {
+    try {
+      console.log("Pipeline: Calling ElevenLabs...");
+      const response = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "xi-api-key": elevenLabsKey,
+          },
+          body: JSON.stringify({
+            text: judge.finalScript.slice(0, 2500),
+            model_id: "eleven_flash_v2_5",
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75,
+            },
+          }),
+        }
+      );
+      
+      apiResponseStatus = response.status;
+      console.log("Pipeline: ElevenLabs status:", response.status);
+      
+      if (!response.ok) {
+        const errText = await response.text();
+        audioError = `ElevenLabs API error ${response.status}: ${errText.slice(0, 100)}`;
+        console.error("Pipeline: ElevenLabs error:", audioError);
+      } else {
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        // Chunk the base64 encoding to avoid stack overflow
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          const chunk = bytes.slice(i, i + chunkSize);
+          binary += String.fromCharCode(...chunk);
+        }
+        const base64 = btoa(binary);
+        audioResult = JSON.stringify({ 
+          base64: `data:audio/mpeg;base64,${base64}`,
+          url: `data:audio/mpeg;base64,${base64}` 
+        });
+        console.log("Pipeline: Audio generated successfully, length:", audioResult.length);
+      }
+    } catch (err) {
+      audioError = err instanceof Error ? err.message : String(err);
+      console.error("Pipeline: fetch ERROR:", audioError);
+    }
   }
   
   const voiceDuration = Math.round(performance.now() - voiceStart);
@@ -149,9 +198,9 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
   
   let voiceOutputSummary = "Audio generation skipped (no API key)";
   if (audioResult) {
-    voiceOutputSummary = "Generated audio using ElevenLabs TTS";
+    voiceOutputSummary = `Generated audio using ElevenLabs TTS (${Math.round(audioResult.length / 1024)}KB)`;
   } else if (audioError) {
-    voiceOutputSummary = `Audio generation failed: ${audioError}`;
+    voiceOutputSummary = `Audio failed: ${audioError}`;
   }
   
   agents.push({
@@ -159,7 +208,7 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
     input: `Script: ${judge.finalScript.slice(0, 100)}...`,
     output_summary: voiceOutputSummary,
     duration_ms: voiceDuration,
-    cost_usd: voiceCost,
+    cost_usd: audioResult ? 0.02 : 0,
     tokens: 0,
   });
   totalDurationMs += voiceDuration;
