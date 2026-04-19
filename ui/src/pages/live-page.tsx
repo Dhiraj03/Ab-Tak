@@ -8,7 +8,16 @@ export function LivePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [currentTickerIndex, setCurrentTickerIndex] = useState(0)
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [currentTime, setCurrentTime] = useState(new Date())
   const audioRef = useRef<HTMLAudioElement>(null)
+
+  // Update clock every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Fetch headlines
   useEffect(() => {
@@ -65,92 +74,26 @@ export function LivePage() {
           <h1 className="channel-name">AB TAK</h1>
         </div>
         <div className="broadcast-time">
-          {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </div>
       </header>
 
       {/* Main Broadcast Area */}
       <main className="broadcast-stage">
-        {/* News Desk & Anchor Area */}
+        {/* News Desk & Anchor Area - Left Aligned */}
         <div className="anchor-booth">
-          {/* Studio Monitors Behind Anchor */}
-          <div className="studio-monitors">
-            <div className="monitor monitor-left">
-              <div className="monitor-content">
-                <span className="monitor-label">WORLD</span>
-                <div className="monitor-globe">🌍</div>
-              </div>
-            </div>
-            <div className="monitor monitor-center">
-              <div className="monitor-content">
-                <span className="monitor-label">BREAKING</span>
-                <div className="monitor-alert">⚡</div>
-              </div>
-            </div>
-            <div className="monitor monitor-right">
-              <div className="monitor-content">
-                <span className="monitor-label">LIVE</span>
-                <div className="monitor-feed">📡</div>
-              </div>
-            </div>
-          </div>
-
-          {/* News Desk */}
-          <div className="news-desk">
-            <div className="desk-surface">
-              <div className="desk-logo">AB TAK</div>
-              <div className="desk-items">
-                <div className="desk-papers">📰</div>
-                <div className="desk-mic">🎙️</div>
-                <div className="desk-tablet">📱</div>
-              </div>
-            </div>
-            <div className="desk-front">
-              <div className="desk-branding">
-                <span className="desk-tagline">24/7 News Network</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Anchor - Large Close-up */}
+          {/* Anchor - Large, Left Positioned (60%) */}
           <div className="anchor-position">
             <NewsAnchorAvatar 
               audioElement={audioRef.current || null}
               isPlaying={isPlayingAudio}
-              title="Breaking News"
+              title="Anchorman"
             />
-            
-            {/* Anchor Name Lower Third */}
-            <div className="anchor-lower-third">
-              <div className="lower-third-bar" />
-              <div className="lower-third-content">
-                <span className="anchor-role">News Anchor</span>
-                <span className="anchor-status">Live Broadcast</span>
-              </div>
-            </div>
           </div>
 
-          {/* Side Panel - Headlines Stack */}
-          <div className="headlines-panel">
-            <div className="panel-header">
-              <span className="panel-title">TOP STORIES</span>
-              <span className="panel-count">{headlines.length}</span>
-            </div>
-            <div className="headlines-stack">
-              {headlines.slice(0, 5).map((headline, index) => (
-                <div 
-                  key={headline.id}
-                  className={`stack-item ${index === 0 ? 'highlight' : ''}`}
-                  style={{ 
-                    opacity: 1 - (index * 0.15),
-                    transform: `translateX(${index * 4}px)`
-                  }}
-                >
-                  <div className="stack-number">{index + 1}</div>
-                  <div className="stack-text">{headline.title}</div>
-                </div>
-              ))}
-            </div>
+          {/* Right side - Reserved for images (40%) */}
+          <div className="content-slot">
+            {/* Empty slot for future images/story content */}
           </div>
         </div>
       </main>
