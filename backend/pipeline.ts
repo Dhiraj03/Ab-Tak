@@ -15,6 +15,9 @@ export type PipelineResult = {
   judge: any;
 };
 
+// Export alias for API compatibility
+export { runFullPipeline as runHourOnePipeline };
+
 export async function runFullPipeline(task: string): Promise<PipelineResult> {
   const runId = `run-${Date.now()}`;
   const fetched = await fetchFeeds();

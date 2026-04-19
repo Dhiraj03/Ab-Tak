@@ -40,23 +40,14 @@ export default {
         const response: GenerateResponse = {
           runId,
           status: 'completed',
-          audioUrl: '', // TODO: Generate audio with ElevenLabs
+          audioUrl: result.audioBase64 || result.audioUrl, // ElevenLabs audio as base64 data URI
           transcript: result.transcript,
-          sources: result.brief.stories.map(s => ({
+          sources: result.brief.stories.map((s: { title: string; link: string; source: string }) => ({
             title: s.title,
             url: s.link,
             source: s.source,
           })),
-          judge: {
-            approvedDraft: 1,
-            scores: {
-              depth: 8,
-              accuracy: 9,
-              clarity: 8,
-              newsworthiness: 8,
-              audio_readiness: 9,
-            },
-          },
+          judge: result.judge,
         };
 
         // Store the run
@@ -68,8 +59,8 @@ export default {
           agents: [],
           transcript: result.transcript,
           sources: response.sources,
-          audio_url: response.audioUrl,
-          judge: response.judge,
+          audio_url: result.audioBase64 || result.audioUrl,
+          judge: result.judge,
           qa_events: [],
           total_duration_ms: 0,
           total_cost_usd: 0,
