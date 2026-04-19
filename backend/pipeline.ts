@@ -118,7 +118,19 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
 
   // Voice Agent - generate audio
   const voiceStart = performance.now();
-  const audioResult = await generateAudio(judge.finalScript, elevenLabsKey);
+  console.log("Pipeline: elevenLabsKey type:", typeof elevenLabsKey, "value:", elevenLabsKey ? "[REDACTED:" + elevenLabsKey.slice(0, 3) + "...]" : "undefined/null");
+  
+  let audioResult = null;
+  let audioError = null;
+  
+  try {
+    audioResult = await generateAudio(judge.finalScript, elevenLabsKey);
+    console.log("Pipeline: audioResult:", audioResult ? "SUCCESS (length:" + audioResult.length + ")" : "NULL");
+  } catch (err) {
+    audioError = err instanceof Error ? err.message : String(err);
+    console.error("Pipeline: generateAudio ERROR:", audioError);
+  }
+  
   const voiceDuration = Math.round(performance.now() - voiceStart);
   const voiceCost = audioResult ? 0.02 : 0; // ElevenLabs cost estimate per request
   
@@ -135,10 +147,17 @@ export async function runHourOnePipeline(task: string, apiKey: string, elevenLab
     }
   }
   
+  let voiceOutputSummary = "Audio generation skipped (no API key)";
+  if (audioResult) {
+    voiceOutputSummary = "Generated audio using ElevenLabs TTS";
+  } else if (audioError) {
+    voiceOutputSummary = `Audio generation failed: ${audioError}`;
+  }
+  
   agents.push({
     name: "Voice Agent",
     input: `Script: ${judge.finalScript.slice(0, 100)}...`,
-    output_summary: audioResult ? "Generated audio using ElevenLabs TTS" : "Audio generation skipped (no API key)",
+    output_summary: voiceOutputSummary,
     duration_ms: voiceDuration,
     cost_usd: voiceCost,
     tokens: 0,

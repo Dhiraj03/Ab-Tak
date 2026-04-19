@@ -4,12 +4,15 @@
 const ELEVENLABS_VOICE_ID = "3WqHLnw80rOZqJzW9YRB";
 
 export async function generateAudio(text: string, apiKey?: string): Promise<string | null> {
-  if (!apiKey) {
-    console.warn("ELEVENLABS_API_KEY not provided");
+  console.log("TTS: generateAudio called, apiKey present:", !!apiKey, "length:", apiKey?.length || 0, "value:", apiKey?.slice(0, 5));
+  
+  if (!apiKey || apiKey.trim() === '') {
+    console.warn("ELEVENLABS_API_KEY not provided or empty");
     return null;
   }
 
   try {
+    console.log("TTS: Calling ElevenLabs API with voice:", ELEVENLABS_VOICE_ID);
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
       {
@@ -29,9 +32,11 @@ export async function generateAudio(text: string, apiKey?: string): Promise<stri
       }
     );
 
+    console.log("TTS: ElevenLabs response status:", response.status);
+    
     if (!response.ok) {
       const err = await response.text();
-      console.warn("ElevenLabs error:", err);
+      console.warn("ElevenLabs error:", response.status, err.slice(0, 200));
       return null;
     }
 

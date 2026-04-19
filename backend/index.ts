@@ -53,6 +53,7 @@ export default {
         const runId = uuidv4();
         
         // Run the pipeline with API keys from env
+        console.log("Backend: OR_API_KEY present:", !!env.OR_API_KEY, "ELEVENLABS_API_KEY present:", !!env.ELEVENLABS_API_KEY);
         const result = await runHourOnePipeline(
           body.task, 
           env.OR_API_KEY,
@@ -67,6 +68,13 @@ export default {
           transcript: result.transcript,
           sources: result.sources,
           judge: result.judge,
+          agents: result.agents,
+          totalDurationMs: result.totalDurationMs,
+          totalCostUsd: result.totalCostUsd,
+          debug: {
+            orKeyPresent: !!env.OR_API_KEY,
+            elevenLabsKeyPresent: !!env.ELEVENLABS_API_KEY,
+          },
         };
 
         // Store the run in D1
