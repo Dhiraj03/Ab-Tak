@@ -8,8 +8,10 @@ import { TranscriptPanel } from '../components/transcript-panel'
 import { generateBulletin } from '../lib/api'
 import type { GenerateResponse } from '../lib/types'
 
+// Preset task - can be changed by developers here
+const DEFAULT_TASK = 'Cover the top global stories from the last 2 hours'
+
 export function HomePage() {
-  const [task, setTask] = useState('Cover the top global stories from the last 2 hours')
   const [bulletin, setBulletin] = useState<GenerateResponse | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -17,17 +19,12 @@ export function HomePage() {
   const audioRef = useRef<HTMLDivElement>(null)
 
   const handleGenerate = useCallback(async () => {
-    if (!task.trim()) {
-      setError('Please enter a task description')
-      return
-    }
-
     setIsGenerating(true)
     setError(null)
     const startTime = performance.now()
     
     try {
-      const response = await generateBulletin({ task: task.trim() })
+      const response = await generateBulletin({ task: DEFAULT_TASK })
       const endTime = performance.now()
       setGenTimeMs(Math.round(endTime - startTime))
       setBulletin(response)
@@ -42,172 +39,72 @@ export function HomePage() {
     } finally {
       setIsGenerating(false)
     }
-  }, [task])
+  }, [])
 
   const hasBulletin = bulletin !== null
 
   return (
-    <div className="broadcast-page">
-      {/* Simple Header */}
-      <div className="simple-header">
-        <div className="brand">
-          <h1>Ab Tak</h1>
-          <span className="divider" />
-          <span className="tagline">24/7 AI Newsroom</span>
-        </div>
+    <div className="broadcast-page clean">
+      {/* Minimal Header */}
+      <div className="minimal-header">
+        <h1 className="brand-title">Ab Tak</h1>
+        <span className="brand-divider" />
+        <span className="brand-tagline">AI Newsroom</span>
       </div>
 
       {/* Error Banner */}
       {error && (
-        <div className="error-banner">
+        <div className="error-banner compact">
           {error}
           <button onClick={() => setError(null)} className="dismiss">×</button>
         </div>
       )}
 
-      {/* Generate Form - Always visible at top */}
+      {/* Generate Button Only */}
       <GenerateForm
-        task={task}
         disabled={isGenerating}
-        onTaskChange={setTask}
         onSubmit={handleGenerate}
       />
 
-      {/* Empty State - First Visit */}
-      {!hasBulletin && !isGenerating && (
-        <section className="empty-state-panel">
-          <div className="empty-icon">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          </div>
-          <h2>Welcome to Ab Tak</h2>
-          <p>
-            Your AI-powered newsroom. Enter a task above and click <strong>"Generate Bulletin"</strong> to create 
-            a fresh news broadcast from live RSS feeds.
-          </p>
-          <div className="empty-features">
-            <div className="feature">
-              <span className="feature-dot" />
-              <span>Live RSS aggregation</span>
-            </div>
-            <div className="feature">
-              <span className="feature-dot" />
-              <span>AI-powered script writing</span>
-            </div>
-            <div className="feature">
-              <span className="feature-dot" />
-              <span>Quality scoring & review</span>
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Loading State */}
       {isGenerating && (
-        <section className="loading-section">
+        <section className="loading-section minimal">
           <div className="loading-content">
             <div className="loading-spinner-large" />
             <h2>Generating your bulletin...</h2>
-            <p>This takes about 30-60 seconds as we fetch live news, write the script, and create the audio.</p>
-            <div className="loading-steps">
-              <div className="loading-step">
-                <span className="step-dot active" />
-                <span>Fetching news</span>
-              </div>
-              <div className="loading-step">
-                <span className="step-dot" />
-                <span>Ranking stories</span>
-              </div>
-              <div className="loading-step">
-                <span className="step-dot" />
-                <span>Writing script</span>
-              </div>
-              <div className="loading-step">
-                <span className="step-dot" />
-                <span>Quality check</span>
-              </div>
-              <div className="loading-step">
-                <span className="step-dot" />
-                <span>Creating audio</span>
-              </div>
-            </div>
+            <p>This takes about 30-60 seconds</p>
           </div>
         </section>
       )}
 
-      {/* Full Width Audio Player - Only show when bulletin exists */}
+      {/* Audio Player Result */}
       {hasBulletin && !isGenerating && (
-        <section className="fullwidth-player" ref={audioRef}>
-          <div className="player-header-row">
-            <div className="now-playing">
-              <span className="live-badge">ON AIR</span>
-              <span className="bulletin-time">
-                {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-            <h2 className="bulletin-title">{bulletin.transcript.slice(0, 80)}...</h2>
-          </div>
-
+        <section className="result-section" ref={audioRef}>
           <AudioPlayer audioUrl={bulletin.audioUrl} />
-
-          <div className="player-meta-row">
-            <span className="meta-item">
-              <strong>Duration:</strong> ~2:30
+          
+          <div className="result-meta">
+            <span className="meta-pill">
+              <strong>{bulletin.sources.length}</strong> sources
             </span>
-            <span className="meta-item">
-              <strong>Sources:</strong> {bulletin.sources.length} articles
+            <span className="meta-pill">
+              <strong>{Math.round((bulletin.judge.scores.depth + bulletin.judge.scores.accuracy + bulletin.judge.scores.clarity + bulletin.judge.scores.newsworthiness + bulletin.judge.scores.audio_readiness) / 5)}/10</strong> quality
             </span>
-            <span className="meta-item">
-              <strong>Quality Score:</strong> {Math.round((bulletin.judge.scores.depth + bulletin.judge.scores.accuracy + bulletin.judge.scores.clarity + bulletin.judge.scores.newsworthiness + bulletin.judge.scores.audio_readiness) / 5)}/10
-            </span>
-            <span className="meta-item">
-              <strong>Generated in:</strong> {(genTimeMs / 1000).toFixed(1)}s
+            <span className="meta-pill">
+              <strong>{(genTimeMs / 1000).toFixed(1)}s</strong> generation time
             </span>
           </div>
         </section>
       )}
 
-      {/* Content Grid - Only show when bulletin exists */}
+      {/* Collapsible Content */}
       {hasBulletin && !isGenerating && (
-        <div className="content-section">
-          <div className="content-main">
-            <TranscriptPanel transcript={bulletin.transcript} />
-            <SourceList sources={bulletin.sources} />
-          </div>
-
-          <div className="content-side">
-            <JudgeScoreCard judge={bulletin.judge} />
-            
-            {/* About Panel */}
-            <section className="panel info-panel">
-              <h4>About This Bulletin</h4>
-              <p>
-                This AI-generated news bulletin was created by analyzing live RSS feeds 
-                from major news sources. The script was written, reviewed by a judge agent, 
-                and converted to audio.
-              </p>
-              <div className="stats-row">
-                <div className="stat">
-                  <strong>{bulletin.judge.approvedDraft}</strong>
-                  <span>Drafts</span>
-                </div>
-                <div className="stat">
-                  <strong>5</strong>
-                  <span>Agents</span>
-                </div>
-                <div className="stat">
-                  <strong>{(genTimeMs / 1000).toFixed(1)}s</strong>
-                  <span>Gen Time</span>
-                </div>
-              </div>
-            </section>
-          </div>
+        <div className="details-section">
+          <TranscriptPanel transcript={bulletin.transcript} />
+          <SourceList sources={bulletin.sources} />
+          <JudgeScoreCard judge={bulletin.judge} />
+          <QaBox runId={bulletin.runId} />
         </div>
       )}
-
-      {/* Q&A Section - Only show when bulletin exists */}
-      {hasBulletin && !isGenerating && <QaBox runId={bulletin.runId} />}
     </div>
   )
 }
