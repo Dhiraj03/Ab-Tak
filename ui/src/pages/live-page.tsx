@@ -50,7 +50,6 @@ export function LivePage() {
   if (isLoading) {
     return (
       <div className="broadcast-studio">
-        {/* Navigation Header */}
         <header className="site-header live-header">
           <div className="site-header-content">
             <div className="brand">
@@ -75,8 +74,8 @@ export function LivePage() {
   const currentHeadline = headlines[currentTickerIndex]
 
   return (
-    <div className="broadcast-studio">
-      {/* Navigation Header */}
+    <div className="broadcast-studio clean">
+      {/* Only Navigation Header */}
       <header className="site-header live-header">
         <div className="site-header-content">
           <div className="brand">
@@ -97,36 +96,21 @@ export function LivePage() {
         <div className="studio-grid" />
       </div>
 
-      {/* Top Bar - Channel Branding */}
-      <header className="broadcast-header">
-        <div className="channel-brand">
-          <span className="live-indicator">LIVE</span>
-          <h1 className="channel-name">AB TAK</h1>
-        </div>
-      </header>
-
-      {/* Main Broadcast Area */}
-      <main className="broadcast-stage">
-        {/* News Desk & Anchor Area - Left Aligned */}
-        <div className="anchor-booth">
-          {/* Anchor - Large, Left Positioned (60%) */}
-          <div className="anchor-position">
+      {/* Main Broadcast Area - Full Height */}
+      <main className="broadcast-stage clean">
+        <div className="anchor-booth clean">
+          <div className="anchor-position clean">
             <NewsAnchorAvatar 
               audioElement={audioRef.current || null}
               isPlaying={isPlayingAudio}
               title="Anchorman"
             />
           </div>
-
-          {/* Right side - Reserved for images (40%) */}
-          <div className="content-slot">
-            {/* Empty slot for future images/story content */}
-          </div>
         </div>
       </main>
 
-      {/* Bottom Ticker - Full Width */}
-      <footer className="broadcast-ticker">
+      {/* Bottom Ticker with Time */}
+      <footer className="broadcast-ticker clean">
         <div className="ticker-branding">
           <span className="ticker-logo">24/7 NEWS</span>
           <span className="ticker-badge">LIVE</span>
@@ -137,24 +121,12 @@ export function LivePage() {
             <div className="ticker-content">
               <span className="ticker-source">{currentHeadline.source}</span>
               <span className="ticker-headline">{currentHeadline.title}</span>
-              <span className="ticker-time">
-                {new Date(currentHeadline.publishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
             </div>
           )}
         </div>
 
         <div className="ticker-time-display">
           {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-        </div>
-
-        <div className="ticker-indicators">
-          {headlines.slice(0, 8).map((_, index) => (
-            <div 
-              key={index}
-              className={`ticker-dot ${index === currentTickerIndex ? 'active' : ''}`}
-            />
-          ))}
         </div>
       </footer>
 
