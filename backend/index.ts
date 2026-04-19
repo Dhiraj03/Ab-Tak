@@ -51,7 +51,7 @@ export default {
           pipelinePlans.set(plan.plan_id, plan);
         }
         
-        const result = await runFullPipeline(body.task, env.ELEVENLABS_API_KEY);
+        const result = await runFullPipeline(body.task, env.OR_API_KEY, env.ELEVENLABS_API_KEY);
         
         lastRunBrief = result.brief;
         lastRunTranscript = result.transcript;
