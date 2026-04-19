@@ -108,58 +108,6 @@ export function LivePage() {
     }
   }, [])
 
-  const startPlayback = useCallback(async () => {
-    console.log('Start playback clicked')
-    console.log('Audio ref:', audioRef.current)
-    console.log('Audio src:', broadcast?.audioUrl?.slice(0, 50))
-    
-    if (!audioRef.current) {
-      console.error('No audio element found')
-      return
-    }
-    
-    if (!broadcast?.audioUrl) {
-      console.error('No audio URL available')
-      return
-    }
-    
-    // Ensure audio src is set
-    if (!audioRef.current.src) {
-      audioRef.current.src = broadcast.audioUrl
-    }
-    
-    // Resume AudioContext after user gesture
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext
-      if (AudioContext) {
-        const ctx = new AudioContext()
-        if (ctx.state === 'suspended') {
-          await ctx.resume()
-          console.log('AudioContext resumed')
-        }
-        await ctx.close()
-      }
-    } catch (e) {
-      console.log('AudioContext setup:', e)
-    }
-    
-    setAudioContextReady(true)
-    
-    // Small delay to let React update
-    setTimeout(async () => {
-      if (audioRef.current) {
-        try {
-          console.log('Attempting to play...')
-          await audioRef.current.play()
-          console.log('Play started successfully')
-          setIsPlayingAudio(true)
-        } catch (e) {
-          console.error('Play failed:', e)
-        }
-      }
-    }, 100)
-  }, [broadcast])
-
   const currentStory: LiveStory | null = broadcast?.stories[currentStoryIndex] || null
 
   if (isLoading || isGenerating) {
