@@ -2,13 +2,13 @@ import OpenAI from "openai";
 
 import type { EditorBrief, RankedStory, StoryCandidate } from "./types";
 
-const OR_API_KEY = "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";
+const OR_API_KEY = process.env.OR_API_KEY;
 const OR_BASE_URL = "https://openrouter.ai/api/v1";
 
-const openai = new OpenAI({
+const openai = OR_API_KEY ? new OpenAI({
   apiKey: OR_API_KEY,
   baseURL: OR_BASE_URL,
-});
+}) : null;
 
 const SOURCE_CREDIBILITY: Record<string, number> = {
   "BBC World": 9,
@@ -62,7 +62,28 @@ function extractJson<T>(input: string): T {
 }
 
 async function callLLM(system: string, prompt: string): Promise<string | null> {
-  return null;
+  if (!openai) return null;
+  
+  try {
+    const response = await openai.chat.completions.create({
+      model: "moonshotai/kimi-k2-0905",
+      max_tokens: 1200,
+      temperature: 0.7,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: prompt },
+      ],
+    });
+
+    if (!response.choices || response.choices.length === 0) {
+      return null;
+    }
+
+    return response.choices[0]?.message?.content ?? null;
+  } catch (error) {
+    console.warn("LLM call failed:", error);
+    return null;
+  }
 }
 
 export async function runMonitorAgent(stories: StoryCandidate[]): Promise<RankedStory[]> {
