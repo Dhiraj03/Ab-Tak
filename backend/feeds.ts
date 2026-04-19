@@ -7,21 +7,12 @@ import type { FeedSource, StoryCandidate } from "./types";
 const parser = new Parser();
 
 export const DEFAULT_FEEDS: FeedSource[] = [
-  {
-    name: "NDTV India",
-    url: "https://feeds.ndtv.com/news/india.rss",
-    credibility: 9,
-  },
-  {
-    name: "Times of India",
-    url: "https://timesofindia.indiatimes.com/rssfeed.cms",
-    credibility: 8,
-  },
-  {
-    name: "The Hindu",
-    url: "https://www.thehindu.com/news/feeder/default.rss",
-    credibility: 9,
-  },
+  { name: "NDTV India", url: "https://feeds.ndtv.com/news/india.rss", credibility: 9 },
+  { name: "Times of India", url: "https://timesofindia.indiatimes.com/rssfeed.cms", credibility: 8 },
+  { name: "The Hindu", url: "https://www.thehindu.com/news/feeder/default.rss", credibility: 9 },
+  { name: "India Express", url: "https://indianexpress.com/rss/india-news.xml", credibility: 8 },
+  { name: "BBC India", url: "https://feeds.bbci.co.uk/news/world/asia/rss.xml", credibility: 9 },
+  { name: "Google News India", url: "https://news.google.com/rss/topics/CAAqJggKIiRDQkFTRWdvSUwyMHZNRGx1YlY4U0FtVnVHZ0pWVXlnQVAB?hl=en-IN&gl=IN", credibility: 8 },
 ];
 
 function normalizeText(value: string | null | undefined) {
