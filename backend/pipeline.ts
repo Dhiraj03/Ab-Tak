@@ -18,7 +18,7 @@ export type PipelineResult = {
 // Export alias for API compatibility
 export { runFullPipeline as runHourOnePipeline };
 
-export async function runFullPipeline(task: string): Promise<PipelineResult> {
+export async function runFullPipeline(task: string, elevenApiKey?: string): Promise<PipelineResult> {
   const runId = `run-${Date.now()}`;
   const fetched = await fetchFeeds();
   const ranked = await runMonitorAgent(fetched);
@@ -31,7 +31,7 @@ export async function runFullPipeline(task: string): Promise<PipelineResult> {
   const judge = await runJudgeAgent(transcript, brief);
   
   // Generate audio (may be null if API key not set)
-  const audioResult = await generateAudio(judge.finalScript);
+  const audioResult = await generateAudio(judge.finalScript, elevenApiKey);
   
   let audioBase64 = "";
   let audioUrl = "";

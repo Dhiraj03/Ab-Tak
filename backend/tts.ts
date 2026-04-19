@@ -3,17 +3,14 @@ import { existsSync } from "fs";
 import path from "path";
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const ELEVENLABS_VOICE_ID = "3WqHLnw80rOZqJzW9YRB";
-const AUDIO_DIR = "./audio";
+const ELEVENLABS_VOICE_ID = "v94rb3DMOvQwADJySFrY";
 
-async function ensureAudioDir() {
-  if (!existsSync(AUDIO_DIR)) {
-    await mkdir(AUDIO_DIR, { recursive: true });
-  }
-}
+let audioBufferCache: Buffer | null = null;
 
-export async function generateAudio(text: string): Promise<string | null> {
-  if (!ELEVENLABS_API_KEY) {
+export async function generateAudio(text: string, apiKey?: string): Promise<string | null> {
+  const key = apiKey || ELEVENLABS_API_KEY;
+  
+  if (!key) {
     console.warn("ELEVENLABS_API_KEY not set");
     return null;
   }
@@ -25,7 +22,7 @@ export async function generateAudio(text: string): Promise<string | null> {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "xi-api-key": ELEVENLABS_API_KEY,
+          "xi-api-key": key,
         },
         body: JSON.stringify({
           text,
@@ -47,15 +44,9 @@ export async function generateAudio(text: string): Promise<string | null> {
     const buffer = await response.arrayBuffer();
     const audioBuffer = Buffer.from(buffer);
 
-    // Save to file
-    await ensureAudioDir();
-    const filename = `bulletin-${Date.now()}.mp3`;
-    const filepath = path.join(AUDIO_DIR, filename);
-    await writeFile(filepath, audioBuffer);
-
-    // Return both base64 and file path
+    // In Cloudflare, just return base64 (no file system)
     const base64 = audioBuffer.toString("base64");
-    return JSON.stringify({ base64: `data:audio/mp3;base64,${base64}`, filepath: `/${AUDIO_DIR}/${filename}` });
+    return JSON.stringify({ base64: `data:audio/mp3;base64,${base64}`, filepath: '' });
   } catch (error) {
     console.warn("TTS failed:", error);
     return null;

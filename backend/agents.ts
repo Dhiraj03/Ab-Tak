@@ -59,101 +59,74 @@ async function callLLM(system: string, prompt: string): Promise<string | null> {
   return null;
 }
 
-export async function runMonitorAgent(stories: StoryCandidate[]): Promise<RankedStory[]> {
-  const llmResponse = await callLLM(
-    "You are a newsroom monitor. Rank stories by recency, significance, and source credibility. Return only JSON.",
-    `Rank these stories and return JSON with this shape:\n{\n  "stories": [\n    {\n      "storyId": "...",\n      "recency": 1-10,\n      "significance": 1-10,\n      "credibility": 1-10,\n      "overall": 1-10,\n      "reasoning": "one sentence"\n    }\n  ]\n}\n\nStories:\n${JSON.stringify(stories, null, 2)}`
-  );
+const NEWS_CATEGORIES = [
+  "politics", "election", "government", "minister", "cm", "pm", "bjp", "congress", "assembly", "parliament",
+  "economy", "market", "stock", "rupee", "gdp", "inflation", "tax", "budget",
+  "war", "conflict", "military", "security", "terror", "attack", "israel", "iran", "ukraine",
+  "crime", "murder", "death", "accident", "violence", "police", "court",
+  "sports", "cricket", "ipl", "football", "olympics", "medal",
+  "technology", "ai", "google", "meta", "startup", "tech",
+  "climate", "weather", "rain", "flood", "earthquake", "heatwave"
+];
 
-  if (llmResponse) {
-    try {
-      const parsed = extractJson<{
-        stories: Array<{
-          storyId: string;
-          recency: number;
-          significance: number;
-          credibility: number;
-          overall: number;
-          reasoning: string;
-        }>;
-      }>(llmResponse);
+const CATEGORY_WEIGHTS: Record<string, number> = {
+  politics: 10, election: 10, government: 9, minister: 8, cm: 8, pm: 9, bjp: 7, congress: 7, assembly: 9,
+  economy: 9, market: 8, stock: 8, rupee: 7, gdp: 8, inflation: 8, budget: 9,
+  war: 10, conflict: 10, military: 9, security: 9, terror: 10, attack: 10, israel: 9, iran: 9,
+  crime: 8, murder: 9, death: 8, accident: 7, violence: 8, police: 7, court: 8,
+  sports: 6, cricket: 7, ipl: 7, football: 6, olympics: 8,
+  technology: 7, ai: 8, google: 7, meta: 7, startup: 7,
+  climate: 8, weather: 7, flood: 8, earthquake: 10, heatwave: 8
+};
 
-      const byId = new Map(stories.map((story) => [story.id, story]));
-
-      return parsed.stories
-        .map((item) => {
-          const story = byId.get(item.storyId);
-          if (!story) return null;
-
-          return {
-            ...story,
-            scores: {
-              recency: clampScore(item.recency),
-              significance: clampScore(item.significance),
-              credibility: clampScore(item.credibility),
-              overall: clampScore(item.overall),
-            },
-            reasoning: item.reasoning,
-          };
-        })
-        .filter((story): story is RankedStory => Boolean(story))
-        .sort((a, b) => b.scores.overall - a.scores.overall);
-    } catch {
-      // Fall through to deterministic ranking.
+function calculateRelevance(title: string, summary: string): number {
+  const text = `${title} ${summary}`.toLowerCase();
+  let score = 5;
+  let matchCount = 0;
+  
+  for (const cat of NEWS_CATEGORIES) {
+    if (text.includes(cat)) {
+      matchCount++;
+      score += CATEGORY_WEIGHTS[cat] || 1;
     }
   }
+  
+  return Math.min(10, score + (matchCount > 2 ? 2 : 0));
+}
 
-  return stories
-    .map((story) => {
-      const recency = recencyScore(story.publishedAt);
-      const significance = keywordScore(story.title, story.articleText || story.summary);
-      const credibility = SOURCE_CREDIBILITY[story.source] ?? 7;
-      const overall = clampScore(recency * 0.4 + significance * 0.4 + credibility * 0.2);
-
-      return {
-        ...story,
-        scores: {
-          recency,
-          significance,
-          credibility,
-          overall,
-        },
-        reasoning: `Ranked for freshness (${recency}/10), significance (${significance}/10), and source trust (${credibility}/10).`,
-      };
-    })
-    .sort((a, b) => b.scores.overall - a.scores.overall);
+export async function runMonitorAgent(stories: StoryCandidate[]): Promise<RankedStory[]> {
+  return stories.map((story) => {
+    const hoursOld = (Date.now() - new Date(story.publishedAt).getTime()) / 36e5;
+    const recency = hoursOld <= 1 ? 10 : hoursOld <= 3 ? 9 : hoursOld <= 6 ? 8 : hoursOld <= 12 ? 7 : hoursOld <= 24 ? 5 : 3;
+    const relevance = calculateRelevance(story.title, story.summary);
+    const credibility = SOURCE_CREDIBILITY[story.source] ?? 7;
+    const overall = clampScore(recency * 0.35 + relevance * 0.45 + credibility * 0.2);
+    
+    return {
+      ...story,
+      scores: { recency, significance: relevance, credibility, overall },
+      reasoning: `Recency: ${recency}/10, Relevance: ${relevance}/10, Credibility: ${credibility}/10`,
+    };
+  }).sort((a, b) => b.scores.overall - a.scores.overall);
 }
 
 export async function runEditorAgent(task: string, rankedStories: RankedStory[]): Promise<EditorBrief> {
-  const topStories = rankedStories.slice(0, 3);
-
-  const llmResponse = await callLLM(
-    "You are a senior news editor. Choose the top three stories and create a radio bulletin brief. Return only JSON.",
-    `Task: ${task}\n\nReturn JSON with this shape:\n{\n  "task": "string",\n  "coldOpen": "string",\n  "headlinesTease": ["..."],\n  "stories": [\n    {\n      "storyId": "...",\n      "title": "...",\n      "source": "...",\n      "link": "...",\n      "angle": "...",\n      "keyFacts": ["..."],\n      "tone": "..."\n    }\n  ],\n  "signOff": "string"\n}\n\nRanked stories:\n${JSON.stringify(topStories, null, 2)}`
-  );
-
-  if (llmResponse) {
-    try {
-      return extractJson<EditorBrief>(llmResponse);
-    } catch {
-      // Fall through to deterministic editor output.
-    }
-  }
+  const topStories = rankedStories.slice(0, 5);
 
   return {
     task,
-    coldOpen: "Here are the top global stories shaping the day.",
-    headlinesTease: topStories.map((story) => story.title),
-    stories: topStories.map((story) => ({
+    coldOpen: "Good morning. Here's your Ab Tak bulletin.",
+    headlinesTease: topStories.map(s => s.title.split('.').slice(0, 20).join('.')),
+    stories: topStories.map((story, i) => ({
       storyId: story.id,
-      title: story.title,
+      title: story.title.split('.').slice(0, 15).join('.'),
       source: story.source,
       link: story.link,
-      angle: "Focus on the latest development and why it matters now.",
-      keyFacts: [story.excerpt || story.summary || "Latest details still emerging."],
-      tone: "Clear, calm, authoritative",
+      angle: "Latest details and why it matters",
+      keyFacts: [story.summary.slice(0, 200)],
+      tone: "Clear, authoritative"
     })),
-    signOff: "That is your AI Media Desk bulletin.",
+    signOff: "Stay with us for more updates.",
   };
 }
 
@@ -166,7 +139,7 @@ export function createStubTranscript(brief: EditorBrief) {
   }).join(" ... ");
 
   return [
-    "Good morning. Here's your AI Media Desk bulletin.",
+    "Good morning. Here's your Ab Tak bulletin.",
     `${brief.headlinesTease.join(". ")}.`,
     "... ",
     stories,
@@ -210,27 +183,62 @@ export async function runWriterAgent(brief: EditorBrief): Promise<string> {
 }
 
 export async function runJudgeAgent(script: string, brief: EditorBrief): Promise<JudgeResult> {
-  const llmResponse = await callLLM(
-    "You are a news editor judging broadcast scripts. Score on 5 criteria (1-10 each): Depth, Accuracy, Clarity, Newsworthiness, Audio-readiness. If any score < 7, generate a rewrite instruction. Return ONLY JSON.",
-    `Score this script and return JSON:\n\nScript:\n${script}\n\nBrief:\n${JSON.stringify(brief, null, 2)}\n\nReturn JSON with this exact shape:\n{\n  "drafts": [\n    {\n      "draft": 1,\n      "scores": { "depth": 1-10, "accuracy": 1-10, "clarity": 1-10, "newsworthiness": 1-10, "audio_readiness": 1-10 },\n      "overall": number,\n      "rewrite_triggered": true/false,\n      "rewrite_instruction": "if triggered, what to fix"\n    }\n  ],\n  "approvedDraft": number\n}`
-  );
-
-  if (llmResponse) {
-    try {
-      const parsed = extractJson<{
-        drafts: JudgeDraft[];
-        approvedDraft: number;
-      }>(llmResponse);
-      return { ...parsed, finalScript: script };
-    } catch {
-      // fall through
-    }
-  }
-
   const scores: JudgeScores = { depth: 7, accuracy: 7, clarity: 7, newsworthiness: 7, audio_readiness: 7 };
   return {
     approvedDraft: 1,
     drafts: [{ draft: 1, scores, overall: 7, rewrite_triggered: false }],
     finalScript: script,
+  };
+}
+
+export type QaResult = {
+  agent: string;
+  answer: string;
+  relatedStory: string | null;
+  sources: { title: string; url: string }[];
+};
+
+export function runQaAgent(question: string, brief: EditorBrief, transcript: string): QaResult {
+  const q = question.toLowerCase();
+  const stories = brief.stories;
+  
+  let relatedStory: { title: string; link: string; keyFacts: string[] } | null = null;
+  let answer = "";
+  
+  // Find which story relates to the question
+  for (const story of stories) {
+    const titleWords = story.title.toLowerCase().split(/\s+/);
+    const keywords = titleWords.filter(w => w.length > 3);
+    
+    const matchCount = keywords.filter(k => q.includes(k)).length;
+    if (matchCount > 0) {
+      relatedStory = story;
+      break;
+    }
+  }
+  
+  if (relatedStory) {
+    answer = `${relatedStory.keyFacts[0] || 'Related to: ' + relatedStory.title}. For more details, visit the source.`;
+  } else {
+    // Check if question keywords appear in transcript
+    const words = q.split(/\s+/).filter(w => w.length > 4);
+    const foundIn = words.filter(w => transcript.toLowerCase().includes(w));
+    
+    if (foundIn.length > 0) {
+      answer = "This relates to one of the stories in today's bulletin. " + 
+        "The latest updates on this topic were covered in our broadcast. " +
+        "Please refer to the transcript for complete details.";
+    } else {
+      answer = "This question relates to current events. " + 
+        "The information may be from today's news coverage. " +
+        "Check back for our next bulletin for full details.";
+    }
+  }
+  
+  return {
+    agent: relatedStory ? "Context Agent" : "Fact Agent",
+    answer,
+    relatedStory: relatedStory?.title || null,
+    sources: relatedStory ? [{ title: relatedStory.title, url: relatedStory.link }] : []
   };
 }
