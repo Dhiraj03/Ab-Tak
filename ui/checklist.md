@@ -1,6 +1,6 @@
 # UI Checklist - Ab Tak
 
-## Status: ✅ DEMO-READY
+## Status: ✅ WORKSPACE SETUP COMPLETE
 
 **Live URL:** https://ab-tak.pages.dev
 
@@ -8,273 +8,166 @@
 
 ## Completed ✅
 
-### Setup
-- [x] Create Vite React TypeScript app in `ui/`
-- [x] Add `react-router-dom`
-- [x] Add base CSS files
-- [x] Add initial page and component folders
-- [x] Add fixture and config utilities
+### Workspace Setup
+- [x] Root `package.json` with npm workspaces
+- [x] `backend/package.json` created
+- [x] `backend/wrangler.toml` created
+- [x] `backend/index.ts` Worker entrypoint
+- [x] `backend/tsconfig.json` added
+- [x] `ui/.env.production` created
+- [x] One-command install: `npm install`
+- [x] One-command build: `npm run build`
+- [x] One-command deploy: `npm run deploy`
 
-### Contracts (Frozen)
-- [x] Define `GenerateRequest`
-- [x] Define `GenerateResponse`
-- [x] Define `QaRequest`
-- [x] Define `QaResponse`
-- [x] Define `RunRecord`
-- [x] Define judge score types
-- [x] Define agent trace types
+### API Contracts (Frozen)
+- [x] `POST /api/generate` - Backend + Frontend
+- [x] `POST /api/qa` - Backend + Frontend
+- [x] `GET /api/runs` - Backend + Frontend
+- [x] `GET /api/runs/:id` - Backend + Frontend
 
-### Homepage - Demo-Ready News Channel
-- [x] Simple, clean header with brand and "New Bulletin" button
-- [x] Single bulletin player (one at a time for demo)
-- [x] Default bulletin auto-displayed on page load
-- [x] "ON AIR" badge with pulsing animation
-- [x] Loading overlay when generating new bulletin
-- [x] Refresh button with spinner state
-- [x] Error handling with dismiss
-- [x] Transcript always visible
-- [x] Quality score display (calculated average)
-- [x] About panel with stats (drafts, agents, gen time)
+### Secrets Management
+- [x] Hardcoded API key removed from `agents.ts`
+- [x] `env.OPENROUTER_API_KEY` wired through
+- [x] Wrangler secret commands ready:
+  - `npm run secret:openrouter -w backend`
+  - `npm run secret:elevenlabs -w backend`
 
-### Result UI
-- [x] Build audio player section
-- [x] Build transcript panel
-- [x] Build source list
-- [x] Build judge score card
-- [x] Add source links
-
-### Q&A UI
-- [x] Build Q&A input
-- [x] Build submit action
-- [x] Build loading state
-- [x] Build answer card
-- [x] Show answering agent badge
-- [x] Show answer sources
-- [x] Add fixture-backed response flow
-
-### Observability
-- [x] Add `/observability` route
-- [x] Add observability page shell
-- [x] Build run list panel
-- [x] Build trace panel
-- [x] Render fixture run data
-- [x] Show judge details in trace area
-- [x] Show Q&A events in trace area
-
-### Styling
-- [x] Add CSS variables in `variables.css`
-- [x] Add reset and base rules in `global.css`
-- [x] Add layout rules in `layout.css`
-- [x] Add component styles in `components.css`
-- [x] Make homepage responsive
-- [x] Make observability page responsive
-- [x] Apply distinctive editorial aesthetic (Newsreader + JetBrains Mono)
-- [x] Dark newsroom palette with copper/amber accents
-
-### Integration Readiness
-- [x] Centralize API access in `src/lib/api.ts`
-- [x] Read backend base URL from config
-- [x] Keep components independent from fixture source details
-- [x] Match contract names with backend plan
-
-### Deployment
-- [x] Add Cloudflare Pages-compatible build setup
-- [x] Add wrangler.toml with project name `ab-tak`
-- [x] Add `npm run deploy` command (builds + deploys)
-- [x] Live deployment verified
+### Frontend
+- [x] 24/7 news channel UI
+- [x] API integration layer with fixture fallback
+- [x] Configurable backend URL via `VITE_API_BASE_URL`
 
 ---
 
-## Backend Requirements (For Person A)
+## Deployment Workflow
 
-### Required API Endpoints
+### First-Time Setup (One-Time)
 
-#### 1. `POST /api/generate`
-**Purpose:** Generate a new news bulletin
+1. **Deploy backend first** to get the Worker URL:
+```bash
+npm run deploy:backend
+```
+Note the URL (e.g., `https://ab-tak-api.workers.dev`)
 
-**Request:**
-```json
-{
-  "task": "Cover the top global stories from the last 2 hours"
-}
+2. **Set the API key secret** (rotate the exposed one first):
+```bash
+npm run secret:openrouter -w backend
+# Enter your new OpenRouter API key
 ```
 
-**Response:**
-```json
-{
-  "runId": "uuid",
-  "status": "completed",
-  "audioUrl": "https://.../bulletin.mp3",
-  "transcript": "Full script text...",
-  "sources": [
-    {
-      "title": "Story title",
-      "url": "https://...",
-      "source": "Reuters"
-    }
-  ],
-  "judge": {
-    "approvedDraft": 2,
-    "scores": {
-      "depth": 8,
-      "accuracy": 9,
-      "clarity": 8,
-      "newsworthiness": 8,
-      "audio_readiness": 9
-    }
-  }
-}
+3. **Update frontend config** in `ui/.env.production`:
+```env
+VITE_API_BASE_URL=https://ab-tak-api.<your-subdomain>.workers.dev
 ```
 
-**Implementation:**
-- Fetch RSS feeds (BBC World, Reuters)
-- Extract article text
-- Run Monitor Agent → Editor Agent → Writer Agent → Judge Agent
-- Generate TTS audio (ElevenLabs)
-- Return complete response
-
----
-
-#### 2. `POST /api/qa`
-**Purpose:** Answer user questions about bulletins
-
-**Request:**
-```json
-{
-  "runId": "uuid",
-  "question": "What's the background on this story?"
-}
+4. **Deploy frontend**:
+```bash
+npm run deploy:ui
 ```
 
-**Response:**
-```json
-{
-  "agent": "Context Agent",
-  "answer": "Three sentence answer...",
-  "sources": [
-    {
-      "title": "Source title",
-      "url": "https://..."
-    }
-  ],
-  "durationMs": 1200
-}
+### Subsequent Deploys (One Command)
+
+After the first setup, just run:
+```bash
+npm run deploy
 ```
 
-**Implementation:**
-- Classify question type (context/fact/opinion)
-- Route to appropriate agent
-- Return answer with agent badge
+This will:
+1. Deploy backend Worker
+2. Deploy frontend Pages
 
----
+### Development Commands
 
-#### 3. `GET /api/runs`
-**Purpose:** List all bulletin runs
+```bash
+# Install everything
+npm install
 
-**Response:**
-```json
-[
-  {
-    "run_id": "uuid",
-    "timestamp": "2026-04-19T18:40:00.000Z",
-    "task": "string",
-    "status": "completed",
-    "agents": [...],
-    "transcript": "string",
-    "sources": [...],
-    "audio_url": "string",
-    "judge": {...},
-    "qa_events": [...],
-    "total_duration_ms": 34400,
-    "total_cost_usd": 0.098
-  }
-]
+# Build everything
+npm run build
+
+# Dev mode (both frontend and backend)
+npm run dev
+
+# Dev mode (backend only)
+npm run dev:backend
+
+# Dev mode (frontend only)
+npm run dev:ui
 ```
 
 ---
 
-#### 4. `GET /api/runs/:id`
-**Purpose:** Get single run details
+## Backend Status
 
-**Response:** Same as list item above
+**Current Implementation:**
+- Worker entrypoint with 4 API routes
+- RSS feed fetching (BBC, Al Jazeera)
+- Monitor Agent (deterministic ranking)
+- Editor Agent (deterministic brief creation)
+- In-memory run storage (for demo)
 
----
+**Known Limitations for Buildathon:**
+- ⚠️ LLM calls are stubbed (returns null, falls back to deterministic)
+- ⚠️ No audio generation yet (TTS pending)
+- ⚠️ No full article extraction (using RSS summaries only)
+- ⚠️ No Judge Agent rewrite loop
+- ⚠️ No Writer Agent (just stub transcript)
 
-### Backend Architecture Notes
-
-**Person A Responsibilities:**
-- RSS ingestion (BBC World, Reuters)
-- Article extraction (@mozilla/readability)
-- Agent pipeline implementation
-- ElevenLabs TTS integration
-- Run persistence (JSON files)
-- API routes
-
-**Agent Pipeline:**
-1. **Monitor Agent** - Fetch and rank stories
-2. **Editor Agent** - Select top 3, set angles
-3. **Writer Agent** - Generate broadcast script
-4. **Judge Agent** - Score and approve
-5. **Voice Agent** - Convert to audio
-
-**Stack:**
-- TypeScript
-- Cloudflare Workers (for deployment compatibility)
-- JSON file storage (no database needed)
+**Acceptable for Demo:**
+- RSS stories are real
+- Pipeline runs end-to-end
+- API contract matches
+- Frontend can integrate
 
 ---
 
-## Next Steps
+## Quick Test
 
-### Option 1: Continue UI Polish (Person B)
-- [ ] Add loading skeletons
-- [ ] Add copy-to-clipboard for transcript
-- [ ] Add share link functionality
-- [ ] Add keyboard shortcuts
-- [ ] Add sound effects for interactions
+Before full deploy, test backend locally:
+```bash
+npm run dev:backend
+# In another terminal:
+curl http://localhost:8787/health
+```
 
-### Option 2: Backend Integration Prep
-- [ ] Document exact API contract for Person A
-- [ ] Add CORS configuration for backend
-- [ ] Test backend endpoints once ready
-- [ ] Swap fixture data for real API calls
-
-### Option 3: Content & Fixtures
-- [ ] Create more diverse fixture bulletins
-- [ ] Add different categories (Tech, World, Business)
-- [ ] Improve transcript quality in fixtures
+Should return: `{"status":"ok"}`
 
 ---
 
-## Integration Test Plan
+## Next Steps (Priority Order)
 
-When backend is ready:
+### Critical (Before First Deploy)
+1. [ ] Rotate exposed OpenRouter API key
+2. [ ] Run `npm run secret:openrouter -w backend`
+3. [ ] Deploy backend: `npm run deploy:backend`
+4. [ ] Update `ui/.env.production` with backend URL
+5. [ ] Deploy frontend: `npm run deploy:ui`
 
-1. Set `VITE_API_BASE_URL` in `.env`
-2. Update `src/lib/api.ts` to use real endpoints
-3. Test each flow:
-   - Generate new bulletin
-   - Play audio
-   - Read transcript
-   - Click sources
-   - Ask Q&A question
-   - Check observability
-4. Deploy updated UI
-5. Full end-to-end demo
+### Nice to Have (If Time Permits)
+- [ ] Enable LLM calls in agents (uncomment + test)
+- [ ] Add ElevenLabs TTS for audio
+- [ ] Add more fixture runs for observability
+- [ ] Add Judge Agent scoring
+- [ ] Add Writer Agent for real transcripts
 
 ---
 
-## Demo Script (Current)
+## Emergency Fallbacks
 
-1. **Landing** - "This is Ab Tak, a 24/7 AI newsroom"
-2. **Current Bulletin** - "Here's what's on air now"
-3. **Click New Bulletin** - "Let's generate fresh news"
-4. **Loading State** - "The AI is running: Monitor → Editor → Writer → Judge → Voice"
-5. **New Bulletin Appears** - Audio ready, transcript visible
-6. **Q&A** - "Ask a question about the story"
-7. **Observability** - "See how the agents worked together"
+**If backend fails to deploy:**
+- Frontend still works with fixtures
+- Demo can use fixture mode only
+- Update `ui/.env.production` to empty string to force fixtures
+
+**If jsdom/readability breaks in Workers:**
+- Backend already falls back to RSS summaries
+- No code change needed
+
+**If API calls fail:**
+- Frontend automatically falls back to fixtures
+- Zero-downtime demo possible
 
 ---
 
 Updated: 2026-04-19
-Status: UI Complete ✅ | Waiting for Backend 🔄
+Status: Workspace Complete ✅ | Backend Deploy Pending 🔄
