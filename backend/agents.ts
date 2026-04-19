@@ -55,7 +55,7 @@ function extractJson<T>(input: string): T {
   return JSON.parse(jsonString) as T;
 }
 
-export async function callLLM(system: string, prompt: string, apiKey: string, model: string = "anthropic/claude-3.5-sonnet"): Promise<string | null> {
+export async function callLLM(system: string, prompt: string, apiKey: string, model: string = "google/gemma-4-26b-a4b-it:free"): Promise<string | null> {
   try {
     const response = await fetch(`${OR_BASE_URL}/chat/completions`, {
       method: "POST",
