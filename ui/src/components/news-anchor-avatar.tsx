@@ -12,6 +12,12 @@ export function NewsAnchorAvatar({ audioElement, isPlaying = false, title = 'AB 
   const [blinkState, setBlinkState] = useState<'open' | 'closed'>('open')
   const [isHovered, setIsHovered] = useState(false)
 
+  // Log state changes
+  useEffect(() => {
+    const mouth = getMouthState()
+    console.log('Anchor state:', { level: audioLevel.toFixed(3), isPlaying, mouth })
+  }, [audioLevel, isPlaying])
+
   // Blink animation
   useEffect(() => {
     const blinkInterval = setInterval(() => {
@@ -25,8 +31,8 @@ export function NewsAnchorAvatar({ audioElement, isPlaying = false, title = 'AB 
   // Determine mouth state based on audio level
   const getMouthState = (): 'closed' | 'mid' | 'open' => {
     if (!isPlaying) return 'closed'
-    if (audioLevel < 0.08) return 'closed'
-    if (audioLevel < 0.25) return 'mid'
+    if (audioLevel < 0.05) return 'closed'
+    if (audioLevel < 0.15) return 'mid'
     return 'open'
   }
 

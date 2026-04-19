@@ -107,6 +107,7 @@ export function LivePage() {
             audioElement={audioRef.current}
             isPlaying={isPlayingAudio}
             title="Live Anchor"
+            key={broadcast?.runId || 'no-broadcast'}
           />
         </div>
 
@@ -152,11 +153,25 @@ export function LivePage() {
             ref={audioRef}
             controls
             autoPlay
+            playsInline
+            crossOrigin="anonymous"
             className="live-audio-player"
             src={broadcast.audioUrl}
-            onPlay={() => setIsPlayingAudio(true)}
-            onPause={() => setIsPlayingAudio(false)}
-            onEnded={() => setIsPlayingAudio(false)}
+            onPlay={() => {
+              console.log('Audio playing')
+              setIsPlayingAudio(true)
+            }}
+            onPause={() => {
+              console.log('Audio paused')
+              setIsPlayingAudio(false)
+            }}
+            onEnded={() => {
+              console.log('Audio ended')
+              setIsPlayingAudio(false)
+            }}
+            onError={(e) => {
+              console.error('Audio error:', e)
+            }}
           >
             Your browser does not support audio.
           </audio>
