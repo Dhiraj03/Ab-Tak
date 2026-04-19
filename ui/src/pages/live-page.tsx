@@ -168,10 +168,11 @@ export function LivePage() {
         <header className="site-header live-header">
           <div className="site-header-content">
             <div className="brand"><h1>Ab Tak</h1><span>AI Media Desk</span></div>
-            <nav className="site-nav">
+            <nav className="site-nav" aria-label="Primary">
               <NavLink to="/" end>Bulletin</NavLink>
               <NavLink to="/live">Live</NavLink>
               <NavLink to="/observability">Observability</NavLink>
+              <NavLink to="/eval">Eval</NavLink>
             </nav>
           </div>
         </header>
@@ -189,10 +190,11 @@ export function LivePage() {
       <header className="site-header live-header">
         <div className="site-header-content">
           <div className="brand"><h1>Ab Tak</h1><span>AI Media Desk</span></div>
-          <nav className="site-nav">
+          <nav className="site-nav" aria-label="Primary">
             <NavLink to="/" end>Bulletin</NavLink>
             <NavLink to="/live">Live</NavLink>
             <NavLink to="/observability">Observability</NavLink>
+            <NavLink to="/eval">Eval</NavLink>
           </nav>
         </div>
       </header>
