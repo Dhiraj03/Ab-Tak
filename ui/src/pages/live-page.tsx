@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { NavLink } from 'react-router-dom'
 import { fetchHeadlines } from '../lib/api'
 import { NewsAnchorAvatar } from '../components/news-anchor-avatar'
 import type { Headline } from '../lib/types'
@@ -49,6 +50,20 @@ export function LivePage() {
   if (isLoading) {
     return (
       <div className="broadcast-studio">
+        {/* Navigation Header */}
+        <header className="site-header live-header">
+          <div className="site-header-content">
+            <div className="brand">
+              <h1>Ab Tak</h1>
+              <span>AI Media Desk</span>
+            </div>
+            <nav className="site-nav" aria-label="Primary">
+              <NavLink to="/" end>Bulletin</NavLink>
+              <NavLink to="/live">Live</NavLink>
+              <NavLink to="/observability">Observability</NavLink>
+            </nav>
+          </div>
+        </header>
         <div className="studio-loading">
           <div className="loading-pulse" />
           <p>Broadcast Starting...</p>
@@ -61,6 +76,21 @@ export function LivePage() {
 
   return (
     <div className="broadcast-studio">
+      {/* Navigation Header */}
+      <header className="site-header live-header">
+        <div className="site-header-content">
+          <div className="brand">
+            <h1>Ab Tak</h1>
+            <span>AI Media Desk</span>
+          </div>
+          <nav className="site-nav" aria-label="Primary">
+            <NavLink to="/" end>Bulletin</NavLink>
+            <NavLink to="/live">Live</NavLink>
+            <NavLink to="/observability">Observability</NavLink>
+          </nav>
+        </div>
+      </header>
+
       {/* Studio Background */}
       <div className="studio-backdrop">
         <div className="studio-lighting" />
@@ -72,9 +102,6 @@ export function LivePage() {
         <div className="channel-brand">
           <span className="live-indicator">LIVE</span>
           <h1 className="channel-name">AB TAK</h1>
-        </div>
-        <div className="broadcast-time">
-          {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </div>
       </header>
 
@@ -101,7 +128,7 @@ export function LivePage() {
       {/* Bottom Ticker - Full Width */}
       <footer className="broadcast-ticker">
         <div className="ticker-branding">
-          <span className="ticker-logo">AB TAK</span>
+          <span className="ticker-logo">24/7 NEWS</span>
           <span className="ticker-badge">LIVE</span>
         </div>
         
@@ -115,6 +142,10 @@ export function LivePage() {
               </span>
             </div>
           )}
+        </div>
+
+        <div className="ticker-time-display">
+          {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </div>
 
         <div className="ticker-indicators">
