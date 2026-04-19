@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import { GenerateForm } from '../components/generate-form'
 import { AudioPlayer } from '../components/audio-player'
 import { JudgeScoreCard } from '../components/judge-score-card'
 import { QaBox } from '../components/qa-box'
@@ -8,22 +9,25 @@ import { generateBulletin } from '../lib/api'
 import type { GenerateResponse } from '../lib/types'
 
 export function HomePage() {
+  const [task, setTask] = useState('Cover the top global stories from the last 2 hours')
   const [bulletin, setBulletin] = useState<GenerateResponse | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [showTranscript] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [genTimeMs, setGenTimeMs] = useState<number>(0)
   const audioRef = useRef<HTMLDivElement>(null)
 
-  const handleRefresh = useCallback(async () => {
+  const handleGenerate = useCallback(async () => {
+    if (!task.trim()) {
+      setError('Please enter a task description')
+      return
+    }
+
     setIsGenerating(true)
     setError(null)
     const startTime = performance.now()
     
     try {
-      const response = await generateBulletin({ 
-        task: 'Cover the top global stories from the last 2 hours' 
-      })
+      const response = await generateBulletin({ task: task.trim() })
       const endTime = performance.now()
       setGenTimeMs(Math.round(endTime - startTime))
       setBulletin(response)
@@ -31,12 +35,13 @@ export function HomePage() {
       setTimeout(() => {
         audioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 100)
-    } catch {
+    } catch (err) {
       setError('Unable to generate new bulletin. Please try again.')
+      console.error('Generate error:', err)
     } finally {
       setIsGenerating(false)
     }
-  }, [])
+  }, [task])
 
   const hasBulletin = bulletin !== null
 
@@ -49,25 +54,6 @@ export function HomePage() {
           <span className="divider" />
           <span className="tagline">24/7 AI Newsroom</span>
         </div>
-        <button 
-          className="refresh-button"
-          onClick={handleRefresh}
-          disabled={isGenerating}
-        >
-          {isGenerating ? (
-            <>
-              <span className="spinner" />
-              Generating...
-            </>
-          ) : (
-            <>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-              </svg>
-              {hasBulletin ? 'New Bulletin' : 'Generate Bulletin'}
-            </>
-          )}
-        </button>
       </div>
 
       {/* Error Banner */}
@@ -77,6 +63,14 @@ export function HomePage() {
           <button onClick={() => setError(null)} className="dismiss">×</button>
         </div>
       )}
+
+      {/* Generate Form - Always visible at top */}
+      <GenerateForm
+        task={task}
+        disabled={isGenerating}
+        onTaskChange={setTask}
+        onSubmit={handleGenerate}
+      />
 
       {/* Empty State - First Visit */}
       {!hasBulletin && !isGenerating && (
@@ -88,7 +82,7 @@ export function HomePage() {
           </div>
           <h2>Welcome to Ab Tak</h2>
           <p>
-            Your AI-powered newsroom. Click <strong>"Generate Bulletin"</strong> to create 
+            Your AI-powered newsroom. Enter a task above and click <strong>"Generate Bulletin"</strong> to create 
             a fresh news broadcast from live RSS feeds.
           </p>
           <div className="empty-features">
@@ -108,8 +102,41 @@ export function HomePage() {
         </section>
       )}
 
+      {/* Loading State */}
+      {isGenerating && (
+        <section className="loading-section">
+          <div className="loading-content">
+            <div className="loading-spinner-large" />
+            <h2>Generating your bulletin...</h2>
+            <p>This takes about 30-60 seconds as we fetch live news, write the script, and create the audio.</p>
+            <div className="loading-steps">
+              <div className="loading-step">
+                <span className="step-dot active" />
+                <span>Fetching news</span>
+              </div>
+              <div className="loading-step">
+                <span className="step-dot" />
+                <span>Ranking stories</span>
+              </div>
+              <div className="loading-step">
+                <span className="step-dot" />
+                <span>Writing script</span>
+              </div>
+              <div className="loading-step">
+                <span className="step-dot" />
+                <span>Quality check</span>
+              </div>
+              <div className="loading-step">
+                <span className="step-dot" />
+                <span>Creating audio</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Main Player - Only show when bulletin exists */}
-      {hasBulletin && (
+      {hasBulletin && !isGenerating && (
         <section className="main-player" ref={audioRef}>
           <div className="player-header">
             <div className="now-playing">
@@ -123,16 +150,6 @@ export function HomePage() {
 
           <div className="player-container">
             <AudioPlayer audioUrl={bulletin.audioUrl} />
-            
-            {isGenerating && (
-              <div className="loading-overlay">
-                <div className="loading-content">
-                  <div className="loading-spinner" />
-                  <p>Generating fresh bulletin...</p>
-                  <span className="loading-sub">This takes about 30-60 seconds</span>
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="player-meta">
@@ -150,12 +167,10 @@ export function HomePage() {
       )}
 
       {/* Content Grid - Only show when bulletin exists */}
-      {hasBulletin && (
+      {hasBulletin && !isGenerating && (
         <div className="content-section">
           <div className="content-main">
-            {showTranscript && (
-              <TranscriptPanel transcript={bulletin.transcript} />
-            )}
+            <TranscriptPanel transcript={bulletin.transcript} />
             <SourceList sources={bulletin.sources} />
           </div>
 
@@ -190,7 +205,7 @@ export function HomePage() {
       )}
 
       {/* Q&A Section - Only show when bulletin exists */}
-      {hasBulletin && <QaBox runId={bulletin.runId} />}
+      {hasBulletin && !isGenerating && <QaBox runId={bulletin.runId} />}
     </div>
   )
 }

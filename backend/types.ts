@@ -65,6 +65,10 @@ export type JudgeResult = {
   finalScript: string;
 };
 
+export interface GenerateRequest {
+  task: string;
+}
+
 export interface GenerateResponse {
   runId: string;
   status: string;
@@ -102,6 +106,7 @@ export interface AgentTrace {
   duration_ms: number;
   cost_usd: number;
   tokens?: number;
+  drafts?: JudgeDraft[];
 }
 
 export interface RunRecord {

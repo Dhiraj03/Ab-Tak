@@ -1,0 +1,47 @@
+{
+  "name": "Ab Tak Manual Eval Set",
+  "description": "5 standard news tasks for evaluating bulletin quality",
+  "tasks": [
+    {
+      "id": "eval-1",
+      "task": "Cover the top global stories from the last 2 hours",
+      "expected_dimensions": ["depth", "accuracy", "clarity", "newsworthiness", "audio_readiness"],
+      "notes": "Standard baseline test - should capture major world news with good variety"
+    },
+    {
+      "id": "eval-2",
+      "task": "Report on technology and AI developments from today",
+      "expected_dimensions": ["depth", "accuracy", "clarity", "newsworthiness", "audio_readiness"],
+      "notes": "Tech-focused - should identify actual tech news and explain concepts clearly for audio"
+    },
+    {
+      "id": "eval-3",
+      "task": "Summarize breaking news about international relations and diplomacy",
+      "expected_dimensions": ["depth", "accuracy", "clarity", "newsworthiness", "audio_readiness"],
+      "notes": "Diplomacy focus - should handle nuanced stories with proper context and multiple viewpoints"
+    },
+    {
+      "id": "eval-4",
+      "task": "Cover economic and market news from the past 4 hours",
+      "expected_dimensions": ["depth", "accuracy", "clarity", "newsworthiness", "audio_readiness"],
+      "notes": "Business/economics - should include specific figures, market movements, and explain significance"
+    },
+    {
+      "id": "eval-5",
+      "task": "Report on science, health, and environment stories from today",
+      "expected_dimensions": ["depth", "accuracy", "clarity", "newsworthiness", "audio_readiness"],
+      "notes": "Science/health focus - should explain technical topics in accessible audio format"
+    }
+  ],
+  "scoring_guide": {
+    "depth": "1-10: Presence of specific facts, figures, named sources, and detailed context",
+    "accuracy": "1-10: Claims are traceable to sources, no factual errors",
+    "clarity": "1-10: Free of jargon, well-structured, easy to understand",
+    "newsworthiness": "1-10: Stories are genuinely significant and current",
+    "audio_readiness": "1-10: Natural spoken flow, proper pacing, works as audio"
+  },
+  "pass_threshold": {
+    "minimum_average": 6.5,
+    "no_single_score_below": 5
+  }
+}

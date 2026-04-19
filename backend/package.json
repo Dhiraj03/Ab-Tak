@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "build": "tsc --noEmit",
     "deploy": "wrangler deploy",
-    "secret:or": "wrangler secret put OR_API_KEY"
+    "secret:or": "wrangler secret put OR_API_KEY",
+    "secret:elevenlabs": "wrangler secret put ELEVENLABS_API_KEY"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",

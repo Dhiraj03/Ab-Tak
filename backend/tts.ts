@@ -1,20 +1,11 @@
-import { mkdir, writeFile } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+// ElevenLabs TTS for Cloudflare Workers
+// Returns audio as base64 data URL (no filesystem access)
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = "3WqHLnw80rOZqJzW9YRB";
-const AUDIO_DIR = "./audio";
 
-async function ensureAudioDir() {
-  if (!existsSync(AUDIO_DIR)) {
-    await mkdir(AUDIO_DIR, { recursive: true });
-  }
-}
-
-export async function generateAudio(text: string): Promise<string | null> {
-  if (!ELEVENLABS_API_KEY) {
-    console.warn("ELEVENLABS_API_KEY not set");
+export async function generateAudio(text: string, apiKey?: string): Promise<string | null> {
+  if (!apiKey) {
+    console.warn("ELEVENLABS_API_KEY not provided");
     return null;
   }
 
@@ -25,10 +16,10 @@ export async function generateAudio(text: string): Promise<string | null> {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "xi-api-key": ELEVENLABS_API_KEY,
+          "xi-api-key": apiKey,
         },
         body: JSON.stringify({
-          text,
+          text: text.slice(0, 2500), // Limit to avoid token limits
           model_id: "eleven_flash_v2_5",
           voice_settings: {
             stability: 0.5,
@@ -45,17 +36,13 @@ export async function generateAudio(text: string): Promise<string | null> {
     }
 
     const buffer = await response.arrayBuffer();
-    const audioBuffer = Buffer.from(buffer);
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
 
-    // Save to file
-    await ensureAudioDir();
-    const filename = `bulletin-${Date.now()}.mp3`;
-    const filepath = path.join(AUDIO_DIR, filename);
-    await writeFile(filepath, audioBuffer);
-
-    // Return both base64 and file path
-    const base64 = audioBuffer.toString("base64");
-    return JSON.stringify({ base64: `data:audio/mp3;base64,${base64}`, filepath: `/${AUDIO_DIR}/${filename}` });
+    // Return as data URL
+    return JSON.stringify({ 
+      base64: `data:audio/mpeg;base64,${base64}`,
+      url: `data:audio/mpeg;base64,${base64}` 
+    });
   } catch (error) {
     console.warn("TTS failed:", error);
     return null;
